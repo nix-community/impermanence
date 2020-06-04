@@ -1,0 +1,7 @@
+* Impermanence
+This repository is about creating modules to help users to declare which
+state they want in their system to be persistent.
+
+This will help users that want to run on tmpfs for ~/~ and even ~/home~ or
+to run on ZFS with rollbacks for those partitions. Maybe even btrfs with
+rollbacks for those partitions.
