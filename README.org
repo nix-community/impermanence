@@ -5,3 +5,9 @@ state they want in their system to be persistent.
 This will help users that want to run on tmpfs for ~/~ and even ~/home~ or
 to run on ZFS with rollbacks for those partitions. Maybe even btrfs with
 rollbacks for those partitions.
+
+** About the name
+: Impermanence, also known as the philosophical problem of change, is a
+: philosophical concept that is addressed in a variety of religions and
+: philosophies. In Eastern philosophy it is best known for its role in the
+: Buddhist three marks of existence. It also is an element of Hinduism.
