@@ -1,10 +1,130 @@
 * Impermanence
-This repository is about creating modules to help users to declare which
-state they want in their system to be persistent.
 
-This will help users that want to run on tmpfs for ~/~ and even ~/home~ or
-to run on ZFS with rollbacks for those partitions. Maybe even btrfs with
-rollbacks for those partitions.
+  Modules to help you handle persistent state on systems with
+  ephemeral root storage.
+
+  The premises of the modules are that you
+
+  1. have a root filesystem which somehow gets wiped on
+     reboot - e.g. using tmpfs on /
+
+  2. have a mount point where state is kept between reboots
+
+  3. want to create links from temporary storage to persistent
+     storage, so that specified files and folders persist between
+     reboots
+
+  There are currently two modules: one for ~NixOS~ and one for ~home-manager~.
+
+*** NixOS
+
+    To use the module, import it into your configuration with
+
+    #+begin_src nix
+      imports = [ /path/to/impermanence/nixos.nix ];
+    #+end_src
+
+    This adds the ~environment.persistence~ option, which is an
+    attribute set of submodules, where the attribute name is the path
+    to persistent storage.
+
+    Usage is shown best with an example:
+
+    #+begin_src nix
+      environment.persistence."/persistent" = {
+        directories = [
+          "/var/log"
+          "/var/lib/bluetooth"
+          "/var/lib/systemd/coredump"
+          "/etc/NetworkManager/system-connections"
+        ];
+        files = [
+          "/etc/machine-id"
+          "/etc/nix/id_rsa"
+        ];
+      };
+    #+end_src
+
+    - ~"/persistent"~ is the path to your persistent storage location
+    - ~directories~ are all directories you want to bind mount to persistent storage
+    - ~files~ are all files you want to link to persistent storage (only in ~/etc~ for now)
+
+    This allows for multiple different persistent storage
+    locations. If you, for example, have one location you back up and
+    one you don't, you can use both by defining two separate
+    attributes under ~environment.persistence~.
+
+    IMPORTANT NOTE: Make sure your persistent volumes are marked with
+    ~neededForBoot~, otherwise you will run into problems.
+
+*** home-manager
+
+    Usage of the ~home-manager~ module is very similar to the one of the
+    ~NixOS~ module - the key differences are that the ~persistence~ option
+    is now under ~home~, rather than ~environment~, and the addition of
+    the submodule option ~removePrefixDirectory~.
+
+    To use the module, import it into your configuration with
+
+    #+begin_src nix
+      imports = [ /path/to/impermanence/home-manager.nix ];
+    #+end_src
+
+    This adds the ~home.persistence~ option, which is an attribute set
+    of submodules, where the attribute name is the path to persistent
+    storage.
+
+    Usage is shown best with an example:
+
+    #+begin_src nix
+      home.persistence."/persistent/home/talyz" = {
+        directories = [
+          "Downloads"
+          "Music"
+          "Pictures"
+          "Documents"
+          "Videos"
+          "VirtualBox VMs"
+          ".gnupg/private-keys-v1.d"
+          ".ssh"
+          ".nixops"
+          ".local/share/keyrings"
+          ".local/share/direnv"
+        ];
+        files = [
+          ".gnupg/pubring.kbx"
+          ".gnupg/sshcontrol"
+          ".gnupg/trustdb.gpg"
+          ".gnupg/random_seed"
+        ];
+      };
+    #+end_src
+
+    - ~"/persistent/home/talyz"~ is the path to your persistent storage location
+    - ~directories~ are all directories you want to link to persistent storage
+    - ~files~ are all files you want to link to persistent storage
+
+    Additionally, the ~home-manager~ module allows for compatibility
+    with ~dotfiles~ repos structured for use with [[https://www.gnu.org/software/stow/][GNU Stow]], where the
+    files linked to are one level deeper than where they should end
+    up. This can be achieved by setting ~removePrefixDirectory~ to ~true~:
+
+    #+begin_src nix
+      home.persistence."/etc/nixos/home-talyz-nixpkgs/dotfiles" = {
+        removePrefixDirectory = true;
+        files = [
+          "screen/.screenrc"
+        ];
+        directories = [
+          "fish/.config/fish"
+        ];
+      };
+    #+end_src
+
+    In the example, the ~.screenrc~ file and ~.config/fish~ directory
+    should be linked to from the home directory; ~removePrefixDirectory~
+    removes the first part of the path when deciding where to put the
+    links.
 
 ** About the name
 : Impermanence, also known as the philosophical problem of change, is a
