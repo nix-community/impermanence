@@ -12,8 +12,8 @@ in
 
     environment.persistence = mkOption {
       default = { };
-      type = with types; attrsOf (submodule
-        {
+      type = with types; attrsOf (
+        submodule {
           options =
             {
               files = mkOption {
@@ -53,12 +53,12 @@ in
         };
 
         mkLinksToPersistentStorage = persistentStoragePath:
-          listToAttrs
-            (map
-              (mkLinkNameValuePair persistentStoragePath)
-              cfg.${persistentStoragePath}.files);
+          listToAttrs (map
+            (mkLinkNameValuePair persistentStoragePath)
+            cfg.${persistentStoragePath}.files
+          );
       in
-        foldl' recursiveUpdate { } (map mkLinksToPersistentStorage persistentStoragePaths);
+      foldl' recursiveUpdate { } (map mkLinksToPersistentStorage persistentStoragePaths);
 
     fileSystems =
       let
@@ -72,19 +72,20 @@ in
         };
 
         mkBindMountsFromPath = persistentStoragePath:
-          listToAttrs
-            (map
-              (mkBindMountNameValuePair persistentStoragePath)
-              cfg.${persistentStoragePath}.directories);
+          listToAttrs (map
+            (mkBindMountNameValuePair persistentStoragePath)
+            cfg.${persistentStoragePath}.directories
+          );
       in
-        foldl' recursiveUpdate { } (map mkBindMountsFromPath persistentStoragePaths);
+      foldl' recursiveUpdate { } (map mkBindMountsFromPath persistentStoragePaths);
 
     system.activationScripts =
       let
         mkDirCreationSnippet = persistentStoragePath: dir:
           let
             targetDir = concatPaths [ persistentStoragePath dir ];
-          in ''
+          in
+          ''
             if [[ ! -e "${targetDir}" ]]; then
                 mkdir -p "${targetDir}"
             fi
@@ -93,23 +94,25 @@ in
         mkDirCreationScriptForPath = persistentStoragePath:
           nameValuePair
             "createDirsIn-${replaceStrings [ "/" "." ] [ "-" "" ] persistentStoragePath}"
-            (noDepEntry
-              (concatMapStrings
-                (mkDirCreationSnippet persistentStoragePath)
-                cfg.${persistentStoragePath}.directories));
+            (noDepEntry (concatMapStrings
+              (mkDirCreationSnippet persistentStoragePath)
+              cfg.${persistentStoragePath}.directories
+            ));
       in
-        listToAttrs (map mkDirCreationScriptForPath persistentStoragePaths);
+      listToAttrs (map mkDirCreationScriptForPath persistentStoragePaths);
 
     assertions =
       let
         files = concatMap (p: p.files or [ ]) (attrValues cfg);
-      in [
+      in
+      [
         {
           assertion = all (hasPrefix "/etc") files;
           message =
             let
               offenders = filter (file: !(hasPrefix "/etc" file)) files;
-            in ''
+            in
+            ''
               environment.persistence.files:
                   Currently, only files in /etc are supported.
                   Please fix / remove the following paths:

@@ -13,8 +13,8 @@ in
 
     home.persistence = mkOption {
       default = { };
-      type = with types; attrsOf (submodule
-        {
+      type = with types; attrsOf (
+        submodule {
           options =
             {
               directories = mkOption {
@@ -48,20 +48,21 @@ in
             "ln -s '${file}' $out";
 
         mkLinkNameValuePair = persistentStoragePath: fileOrDir: {
-          name = if cfg.${persistentStoragePath}.removePrefixDirectory then
-                   dirListToPath (tail (splitPath [ fileOrDir ]))
-                 else
-                   fileOrDir;
+          name =
+            if cfg.${persistentStoragePath}.removePrefixDirectory then
+              dirListToPath (tail (splitPath [ fileOrDir ]))
+            else
+              fileOrDir;
           value = { source = link (concatPaths [ persistentStoragePath fileOrDir ]); };
         };
 
         mkLinksToPersistentStorage = persistentStoragePath:
-          listToAttrs
-            (map
-              (mkLinkNameValuePair persistentStoragePath)
-              (cfg.${persistentStoragePath}.files ++ cfg.${persistentStoragePath}.directories));
+          listToAttrs (map
+            (mkLinkNameValuePair persistentStoragePath)
+            (cfg.${persistentStoragePath}.files ++ cfg.${persistentStoragePath}.directories)
+          );
       in
-        foldl' recursiveUpdate { } (map mkLinksToPersistentStorage persistentStoragePaths);
+      foldl' recursiveUpdate { } (map mkLinksToPersistentStorage persistentStoragePaths);
 
     home.activation =
       let
@@ -70,7 +71,8 @@ in
         mkDirCreationSnippet = persistentStoragePath: dir:
           let
             targetDir = concatPaths [ persistentStoragePath dir ];
-          in ''
+          in
+          ''
             if [[ ! -e "${targetDir}" ]]; then
                 mkdir -p "${targetDir}"
             fi
@@ -83,10 +85,11 @@ in
               [ "writeBoundary" ]
               (concatMapStrings
                 (mkDirCreationSnippet persistentStoragePath)
-                cfg.${persistentStoragePath}.directories);
+                cfg.${persistentStoragePath}.directories
+              );
         };
       in
-        listToAttrs (map mkDirCreationScriptForPath persistentStoragePaths);
+      listToAttrs (map mkDirCreationScriptForPath persistentStoragePaths);
   };
 
 }
