@@ -16,4 +16,4 @@ jobs:
       - uses: cachix/install-nix-action@v9
       - name: Check Nix Formatting
         run: |
-          nixpkgs-fmt --check .
+          nix run nixpkgs.nixpkgs-fmt -c nixpkgs-fmt --check .
