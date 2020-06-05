@@ -1,0 +1,19 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  parsing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: cachix/install-nix-action@v9
+      - name: Check Nix Parsing
+        run: |
+          find . -name "*.nix" -exec nix-instantiate --parse --quiet {} >/dev/null +
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: cachix/install-nix-action@v9
+      - name: Check Nix Formatting
+        run: |
+          nixpkgs-fmt --check .
