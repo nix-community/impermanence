@@ -18,12 +18,12 @@ in
           options =
             {
               directories = mkOption {
-                type = with types; listOf string;
+                type = with types; listOf str;
                 default = [ ];
               };
 
               files = mkOption {
-                type = with types; listOf string;
+                type = with types; listOf str;
                 default = [ ];
               };
 
