@@ -79,7 +79,7 @@ in
           '';
 
         mkDirCreationScriptForPath = persistentStoragePath: {
-          name = "createDirsIn-${replaceStrings [ "/" "." ] [ "-" "" ] persistentStoragePath}";
+          name = "createDirsIn-${replaceStrings [ "/" "." " " ] [ "-" "" "" ] persistentStoragePath}";
           value =
             dag.entryAfter
               [ "writeBoundary" ]

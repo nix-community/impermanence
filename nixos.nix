@@ -93,7 +93,7 @@ in
 
         mkDirCreationScriptForPath = persistentStoragePath:
           nameValuePair
-            "createDirsIn-${replaceStrings [ "/" "." ] [ "-" "" ] persistentStoragePath}"
+            "createDirsIn-${replaceStrings [ "/" "." " " ] [ "-" "" "" ] persistentStoragePath}"
             (noDepEntry (concatMapStrings
               (mkDirCreationSnippet persistentStoragePath)
               cfg.${persistentStoragePath}.directories
