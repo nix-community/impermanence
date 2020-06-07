@@ -21,7 +21,9 @@
     To use the module, import it into your configuration with
 
     #+begin_src nix
-      imports = [ /path/to/impermanence/nixos.nix ];
+      {
+        imports = [ /path/to/impermanence/nixos.nix ];
+      }
     #+end_src
 
     This adds the ~environment.persistence~ option, which is an
@@ -31,18 +33,20 @@
     Usage is shown best with an example:
 
     #+begin_src nix
-      environment.persistence."/persistent" = {
-        directories = [
-          "/var/log"
-          "/var/lib/bluetooth"
-          "/var/lib/systemd/coredump"
-          "/etc/NetworkManager/system-connections"
-        ];
-        files = [
-          "/etc/machine-id"
-          "/etc/nix/id_rsa"
-        ];
-      };
+      {
+        environment.persistence."/persistent" = {
+          directories = [
+            "/var/log"
+            "/var/lib/bluetooth"
+            "/var/lib/systemd/coredump"
+            "/etc/NetworkManager/system-connections"
+          ];
+          files = [
+            "/etc/machine-id"
+            "/etc/nix/id_rsa"
+          ];
+        };
+      }
     #+end_src
 
     - ~"/persistent"~ is the path to your persistent storage location
@@ -67,7 +71,9 @@
     To use the module, import it into your configuration with
 
     #+begin_src nix
-      imports = [ /path/to/impermanence/home-manager.nix ];
+      {
+        imports = [ /path/to/impermanence/home-manager.nix ];
+      }
     #+end_src
 
     This adds the ~home.persistence~ option, which is an attribute set
@@ -77,27 +83,29 @@
     Usage is shown best with an example:
 
     #+begin_src nix
-      home.persistence."/persistent/home/talyz" = {
-        directories = [
-          "Downloads"
-          "Music"
-          "Pictures"
-          "Documents"
-          "Videos"
-          "VirtualBox VMs"
-          ".gnupg/private-keys-v1.d"
-          ".ssh"
-          ".nixops"
-          ".local/share/keyrings"
-          ".local/share/direnv"
-        ];
-        files = [
-          ".gnupg/pubring.kbx"
-          ".gnupg/sshcontrol"
-          ".gnupg/trustdb.gpg"
-          ".gnupg/random_seed"
-        ];
-      };
+      {
+        home.persistence."/persistent/home/talyz" = {
+          directories = [
+            "Downloads"
+            "Music"
+            "Pictures"
+            "Documents"
+            "Videos"
+            "VirtualBox VMs"
+            ".gnupg/private-keys-v1.d"
+            ".ssh"
+            ".nixops"
+            ".local/share/keyrings"
+            ".local/share/direnv"
+          ];
+          files = [
+            ".gnupg/pubring.kbx"
+            ".gnupg/sshcontrol"
+            ".gnupg/trustdb.gpg"
+            ".gnupg/random_seed"
+          ];
+        };
+      }
     #+end_src
 
     - ~"/persistent/home/talyz"~ is the path to your persistent storage location
@@ -110,15 +118,17 @@
     up. This can be achieved by setting ~removePrefixDirectory~ to ~true~:
 
     #+begin_src nix
-      home.persistence."/etc/nixos/home-talyz-nixpkgs/dotfiles" = {
-        removePrefixDirectory = true;
-        files = [
-          "screen/.screenrc"
-        ];
-        directories = [
-          "fish/.config/fish"
-        ];
-      };
+      {
+        home.persistence."/etc/nixos/home-talyz-nixpkgs/dotfiles" = {
+          removePrefixDirectory = true;
+          files = [
+            "screen/.screenrc"
+          ];
+          directories = [
+            "fish/.config/fish"
+          ];
+        };
+      }
     #+end_src
 
     In the example, the ~.screenrc~ file and ~.config/fish~ directory
