@@ -47,11 +47,14 @@ in
             { }
             "ln -s '${file}' $out";
 
+        # Create environment.etc link entry.
         mkLinkNameValuePair = persistentStoragePath: file: {
           name = removePrefix "/etc/" file;
           value = { source = link (concatPaths [ persistentStoragePath file ]); };
         };
 
+        # Create all environment.etc link entries for a specific
+        # persistent storage path.
         mkLinksToPersistentStorage = persistentStoragePath:
           listToAttrs (map
             (mkLinkNameValuePair persistentStoragePath)
@@ -62,6 +65,7 @@ in
 
     fileSystems =
       let
+        # Create fileSystems bind mount entry.
         mkBindMountNameValuePair = persistentStoragePath: dir: {
           name = concatPaths [ "/" dir ];
           value = {
@@ -71,16 +75,20 @@ in
           };
         };
 
-        mkBindMountsFromPath = persistentStoragePath:
+        # Create all fileSystems bind mount entries for a specific
+        # persistent storage path.
+        mkBindMountsForPath = persistentStoragePath:
           listToAttrs (map
             (mkBindMountNameValuePair persistentStoragePath)
             cfg.${persistentStoragePath}.directories
           );
       in
-      foldl' recursiveUpdate { } (map mkBindMountsFromPath persistentStoragePaths);
+      foldl' recursiveUpdate { } (map mkBindMountsForPath persistentStoragePaths);
 
     system.activationScripts =
       let
+        # Create a directory in persistent storage, so we can bind
+        # mount it.
         mkDirCreationSnippet = persistentStoragePath: dir:
           let
             targetDir = concatPaths [ persistentStoragePath dir ];
@@ -91,6 +99,8 @@ in
             fi
           '';
 
+        # Build an activation script which creates all persistent
+        # storage directories we want to bind mount.
         mkDirCreationScriptForPath = persistentStoragePath:
           nameValuePair
             "createDirsIn-${replaceStrings [ "/" "." " " ] [ "-" "" "" ] persistentStoragePath}"
@@ -104,9 +114,12 @@ in
     assertions =
       let
         files = concatMap (p: p.files or [ ]) (attrValues cfg);
+        markedNeededForBoot = cond: fs: (config.fileSystems.${fs}.neededForBoot == cond);
       in
       [
         {
+          # Assert that files are put in /etc, a current limitation,
+          # since we're using environment.etc.
           assertion = all (hasPrefix "/etc") files;
           message =
             let
@@ -115,7 +128,25 @@ in
             ''
               environment.persistence.files:
                   Currently, only files in /etc are supported.
-                  Please fix / remove the following paths:
+
+                  Please fix or remove the following paths:
+                    ${concatStringsSep "\n      " offenders}
+            '';
+        }
+        {
+          # Assert that all persistent storage volumes we use are
+          # marked with neededForBoot.
+          assertion = all (markedNeededForBoot true) persistentStoragePaths;
+          message =
+            let
+              offenders = filter (markedNeededForBoot false) persistentStoragePaths;
+            in
+            ''
+              environment.persistence:
+                  All filesystems used for persistent storage must
+                  have the flag neededForBoot set to true.
+
+                  Please fix or remove the following paths:
                     ${concatStringsSep "\n      " offenders}
             '';
         }
