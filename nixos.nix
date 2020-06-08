@@ -104,6 +104,7 @@ in
     assertions =
       let
         files = concatMap (p: p.files or [ ]) (attrValues cfg);
+        markedNeededForBoot = cond: fs: (config.fileSystems.${fs}.neededForBoot == cond);
       in
       [
         {
@@ -115,7 +116,25 @@ in
             ''
               environment.persistence.files:
                   Currently, only files in /etc are supported.
-                  Please fix / remove the following paths:
+
+                  Please fix or remove the following paths:
+                    ${concatStringsSep "\n      " offenders}
+            '';
+        }
+        {
+          # Assert that all persistent storage volumes we use are
+          # marked with neededForBoot.
+          assertion = all (markedNeededForBoot true) persistentStoragePaths;
+          message =
+            let
+              offenders = filter (markedNeededForBoot false) persistentStoragePaths;
+            in
+            ''
+              environment.persistence:
+                  All filesystems used for persistent storage must
+                  have the flag neededForBoot set to true.
+
+                  Please fix or remove the following paths:
                     ${concatStringsSep "\n      " offenders}
             '';
         }
