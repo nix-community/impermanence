@@ -136,6 +136,16 @@
     removes the first part of the path when deciding where to put the
     links.
 
+** Further reading
+The following blog posts provide more information on the concept of ephemeral
+roots:
+
+- https://elis.nu/blog/2020/05/nixos-tmpfs-as-root/ --- [[https://github.com/etu/][@etu]]'s blog post walks
+  the reader through a NixOS-on-tmpfs installation.
+- https://grahamc.com/blog/erase-your-darlings --- [[https://github.com/grahamc/][@grahamc]]'s blog post details
+  why one would want to erase their state at every boot, as well as how to
+  achieve this using ZFS snapshots.
+
 ** About the name
 : Impermanence, also known as the philosophical problem of change, is a
 : philosophical concept that is addressed in a variety of religions and
