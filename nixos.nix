@@ -9,33 +9,50 @@ let
 in
 {
   options = {
-
     environment.persistence = mkOption {
       default = { };
       type = with types; attrsOf (
         submodule {
           options =
             {
-              files = mkOption {
-                type = with types; listOf str;
-                default = [ ];
-                description = ''
-                  Files in /etc that should be stored in persistent storage.
-                '';
-              };
+              bind = {
+                files = mkOption {
+                  type = with types; listOf str;
+                  default = [ ];
+                  description = ''
+                    Files that should be bind mounted to persistent storage.
+                  '';
+                };
 
-              directories = mkOption {
-                type = with types; listOf str;
-                default = [ ];
-                description = ''
-                  Directories to bind mount to persistent storage.
-                '';
+                directories = mkOption {
+                  type = with types; listOf str;
+                  default = [ ];
+                  description = ''
+                    Directories that should be bind mounted to persistent storage.
+                  '';
+                };
+              };
+              link = {
+                files = mkOption {
+                  type = with types; listOf str;
+                  default = [ ];
+                  description = ''
+                    Files that should be linked to persistent storage.
+                  '';
+                };
+
+                directories = mkOption {
+                  type = with types; listOf str;
+                  default = [ ];
+                  description = ''
+                    Directories that should be linked to persistent storage.
+                  '';
+                };
               };
             };
         }
       );
     };
-
   };
 
   config = {
@@ -56,7 +73,8 @@ in
         mkBindMountsForPath = persistentStoragePath:
           listToAttrs (map
             (mkBindMountNameValuePair persistentStoragePath)
-            cfg.${persistentStoragePath}.directories
+            (cfg.${persistentStoragePath}.bind.directories ++
+              cfg.${persistentStoragePath}.bind.files)
           );
       in
       foldl' recursiveUpdate { } (map mkBindMountsForPath persistentStoragePaths);
@@ -126,8 +144,72 @@ in
             )
           '';
 
-        # Create a symlink to persistent storage, using mkDirWithPerms to
-        # correctly replicate the directory structure above the symlink
+        # Create a file in persistent storage to act as a bind mount point,
+        # using mkDirWithPerms to correctly replicate the directory
+        # structure above it
+        mkFileWithPerms = persistentStoragePath: file: ''
+          (
+          # replicate the directory structure of ${file}
+          ${mkDirWithPerms persistentStoragePath (dirOf file)}
+
+          # The base path for the state directory
+          # e.g. /state, /persist, etc.
+          sourceBase="${persistentStoragePath}"
+          sourceBase="''${sourceBase%/}"
+
+          # The path of the file in the ephemeral fs
+          # e.g. /etc/ssh/ssh_host_rsa_key
+          targetPath="${file}"
+
+          # The path of the file in the state directory
+          # e.g. /state/etc/ssh/ssh_host_rsa_key
+          sourcePath="$sourceBase$targetPath"
+
+          # check that the source exists, if it doesn't exit the underlying
+          # scope (the activation script will continue)
+          realSourcePath="$(realpath "$sourcePath")"
+          if [ ! -d "$realSourcePath" ]; then
+              printf "\e[1;31mBind source '%s' does not exist!\e[0m\n" "$realSourcePath"
+              exit 1
+          fi
+
+          # Create the target file
+          touch "$targetPath"
+
+          # synchronize perms between source and target
+          chown --reference="$realSourcePath" "$currentTargetPath"
+          chmod --reference="$realSourcePath" "$currentTargetPath"
+          )
+        '';
+
+        # Create a symlink to a dir in persistent storage, using
+        # mkDirWithPerms to correctly replicate the directory structure
+        # above the symlink
+        mkDirSymlink = persistentStoragePath: dir: ''
+          # replicate the directory structure of ${dir}
+          ${mkDirWithPerms persistentStoragePath (dirOf dir)}
+
+          # The base path for the state directory
+          # e.g. /state, /persist, etc.
+          sourceBase="${persistentStoragePath}"
+          sourceBase="''${sourceBase%/}"
+
+          # The path of the dir in the ephemeral fs
+          # e.g. /etc/ssh
+          targetPath="${dir}"
+          targetPath="''${target%/}"
+
+          # The path of the dir in the state directory
+          # e.g. /state/etc/ssh
+          sourcePath="$sourceBase$targetPath"
+
+          # Link the source dir to the target
+          ln -s "$sourcePath" "$targetPath"
+        '';
+
+        # Create a symlink to a file in persistent storage, using
+        # mkDirWithPerms to correctly replicate the directory structure
+        # above the symlink
         mkFileSymLink = persistentStoragePath: file: ''
           # replicate the directory structure of ${file}
           ${mkDirWithPerms persistentStoragePath (dirOf file)}
@@ -149,21 +231,31 @@ in
           ln -s "$sourcePath" "$targetPath"
         '';
 
-        # Build an activation script which creates all persistent
-        # storage directories for bind mounting, as well as all file symlinks.
+        # Build an activation script which creates all of our bind mount points
+        # as well as symlinks
         mkActivationScript = persistentStoragePath:
           nameValuePair
-            "createDirsAndLinksIn-${replaceStrings [ "/" "." " " ] [ "-" "" "" ] persistentStoragePath}"
+            "createStateBindAndLinks${replaceStrings [ "/" "." " " ] [ "-" "" "" ] persistentStoragePath}"
             (noDepEntry (concatStrings [
               # Create directories for bind mounts
               (concatMapStrings
                 (mkDirWithPerms persistentStoragePath)
-                cfg.${persistentStoragePath}.directories
+                cfg.${persistentStoragePath}.bind.directories
               )
-              # Create symlinks
+              # Create files for bind mounts
+              (concatMapStrings
+                (mkFileWithPerms persistentStoragePath)
+                cfg.${persistentStoragePath}.bind.files
+              )
+              # Create file symlinks
               (concatMapStrings
                 (mkFileSymLink persistentStoragePath)
-                cfg.${persistentStoragePath}.files
+                cfg.${persistentStoragePath}.link.files
+              )
+              # Create dir symlinks
+              (concatMapStrings
+                (mkDirSymlink persistentStoragePath)
+                cfg.${persistentStoragePath}.link.directories
               )
             ]));
       in
