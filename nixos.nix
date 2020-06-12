@@ -39,30 +39,6 @@ in
   };
 
   config = {
-    environment.etc =
-      let
-        link = file:
-          pkgs.runCommand
-            "${replaceStrings [ "/" "." " " ] [ "-" "" "" ] file}"
-            { }
-            "ln -s '${file}' $out";
-
-        # Create environment.etc link entry.
-        mkLinkNameValuePair = persistentStoragePath: file: {
-          name = removePrefix "/etc/" file;
-          value = { source = link (concatPaths [ persistentStoragePath file ]); };
-        };
-
-        # Create all environment.etc link entries for a specific
-        # persistent storage path.
-        mkLinksToPersistentStorage = persistentStoragePath:
-          listToAttrs (map
-            (mkLinkNameValuePair persistentStoragePath)
-            cfg.${persistentStoragePath}.files
-          );
-      in
-      foldl' recursiveUpdate { } (map mkLinksToPersistentStorage persistentStoragePaths);
-
     fileSystems =
       let
         # Create fileSystems bind mount entry.
@@ -150,17 +126,48 @@ in
             )
           '';
 
+        # Create a symlink to persistent storage, using mkDirWithPerms to
+        # correctly replicate the directory structure above the symlink
+        mkFileSymLink = persistentStoragePath: file: ''
+          # replicate the directory structure of ${file}
+          ${mkDirWithPerms persistentStoragePath (dirOf file)}
+
+          # The base path for the state directory
+          # e.g. /state, /persist, etc.
+          sourceBase="${persistentStoragePath}"
+          sourceBase="''${sourceBase%/}"
+
+          # The path of the file in the ephemeral fs
+          # e.g. /etc/ssh/ssh_host_rsa_key
+          targetPath="${file}"
+
+          # The path of the file in the state directory
+          # e.g. /state/etc/ssh/ssh_host_rsa_key
+          sourcePath="$sourceBase$targetPath"
+
+          # Link the source file to the target
+          ln -s "$sourcePath" "$targetPath"
+        '';
+
         # Build an activation script which creates all persistent
-        # storage directories we want to bind mount.
-        mkDirCreationScriptForPath = persistentStoragePath:
+        # storage directories for bind mounting, as well as all file symlinks.
+        mkActivationScript = persistentStoragePath:
           nameValuePair
-            "createDirsIn-${replaceStrings [ "/" "." " " ] [ "-" "" "" ] persistentStoragePath}"
-            (noDepEntry (concatMapStrings
-              (mkDirWithPerms persistentStoragePath)
-              cfg.${persistentStoragePath}.directories
-            ));
+            "createDirsAndLinksIn-${replaceStrings [ "/" "." " " ] [ "-" "" "" ] persistentStoragePath}"
+            (noDepEntry (concatStrings [
+              # Create directories for bind mounts
+              (concatMapStrings
+                (mkDirWithPerms persistentStoragePath)
+                cfg.${persistentStoragePath}.directories
+              )
+              # Create symlinks
+              (concatMapStrings
+                (mkFileSymLink persistentStoragePath)
+                cfg.${persistentStoragePath}.files
+              )
+            ]));
       in
-      listToAttrs (map mkDirCreationScriptForPath persistentStoragePaths);
+      listToAttrs (map mkActivationScript persistentStoragePaths);
 
     assertions =
       let
