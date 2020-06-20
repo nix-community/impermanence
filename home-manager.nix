@@ -86,7 +86,20 @@ in
               fi
             '';
             stopScript = pkgs.writeShellScript "unmount-${name}" ''
-              fusermount -uz "${mountPoint}"
+              triesLeft=6
+              while (( triesLeft > 0 )); do
+                  if fusermount -u "${mountPoint}"; then
+                      exit 0
+                  else
+                      (( triesLeft-- ))
+                      if (( triesLeft == 0 )); then
+                          echo "Couldn't perform regular unmount of ${mountPoint}. Attempting lazy unmount."
+                          fusermount -uz "${mountPoint}"
+                      else
+                          sleep 5
+                      fi
+                  fi
+              done
             '';
           in
           {
@@ -173,7 +186,20 @@ in
           in
           ''
             if [[ -n ''${mountedPaths["${mountPoint}"]+x} ]]; then
-                fusermount -u "${mountPoint}"
+                triesLeft=3
+                while (( triesLeft > 0 )); do
+                    if fusermount -u "${mountPoint}"; then
+                        break
+                    else
+                        (( triesLeft-- ))
+                        if (( triesLeft == 0 )); then
+                            echo "Couldn't perform regular unmount of ${mountPoint}. Attempting lazy unmount."
+                            fusermount -uz "${mountPoint}" || true
+                        else
+                            sleep 1
+                        fi
+                    fi
+                done
             fi
           '';
 
