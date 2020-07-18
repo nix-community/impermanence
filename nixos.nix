@@ -165,7 +165,11 @@ in
     assertions =
       let
         files = concatMap (p: p.files or [ ]) (attrValues cfg);
-        markedNeededForBoot = cond: fs: (config.fileSystems.${fs}.neededForBoot == cond);
+        markedNeededForBoot = cond: fs:
+          if config.fileSystems ? ${fs} then
+            (config.fileSystems.${fs}.neededForBoot == cond)
+          else
+            cond;
       in
       [
         {
