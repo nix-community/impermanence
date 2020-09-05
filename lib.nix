@@ -18,5 +18,10 @@ let
       path = dirListToPath (splitPath paths);
     in
     prefix + path;
+
+  sanitizeName = name:
+    replaceStrings
+      [ "." ] [ "" ]
+      (strings.sanitizeDerivationName (removePrefix "/" name));
 in
-{ inherit splitPath dirListToPath concatPaths; }
+{ inherit splitPath dirListToPath concatPaths sanitizeName; }
