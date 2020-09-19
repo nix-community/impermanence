@@ -73,28 +73,30 @@ in
                 dirListToPath (tail (splitPath [ dir ]))
               else
                 dir;
-            targetDir = concatPaths [ persistentStoragePath dir ];
-            mountPoint = concatPaths [ config.home.homeDirectory mountDir ];
+            targetDir = escapeShellArg (concatPaths [ persistentStoragePath dir ]);
+            mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
             name = "bindMount-${sanitizeName targetDir}";
             startScript = pkgs.writeShellScript name ''
               set -eu
-              if ! ${pkgs.utillinux}/bin/mount | ${pkgs.gnugrep}/bin/grep -E '${mountPoint}( |/)'; then
-                  ${pkgs.bindfs}/bin/bindfs -f --no-allow-other "${targetDir}" "${mountPoint}"
+              if ! ${pkgs.utillinux}/bin/mount | ${pkgs.gnugrep}/bin/grep -F ${mountPoint}' ' \
+                 && ! ${pkgs.utillinux}/bin/mount | ${pkgs.gnugrep}/bin/grep -F ${mountPoint}/; then
+                  ${pkgs.bindfs}/bin/bindfs -f --no-allow-other ${targetDir} ${mountPoint}
               else
                   echo "There is already an active mount at or below ${mountPoint}!" >&2
                   exit 1
               fi
             '';
             stopScript = pkgs.writeShellScript "unmount-${name}" ''
+              set -eu
               triesLeft=6
               while (( triesLeft > 0 )); do
-                  if fusermount -u "${mountPoint}"; then
+                  if fusermount -u ${mountPoint}; then
                       exit 0
                   else
                       (( triesLeft-- ))
                       if (( triesLeft == 0 )); then
                           echo "Couldn't perform regular unmount of ${mountPoint}. Attempting lazy unmount."
-                          fusermount -uz "${mountPoint}"
+                          fusermount -uz ${mountPoint}
                       else
                           sleep 5
                       fi
@@ -145,28 +147,30 @@ in
                 dirListToPath (tail (splitPath [ dir ]))
               else
                 dir;
-            targetDir = concatPaths [ persistentStoragePath dir ];
-            mountPoint = concatPaths [ config.home.homeDirectory mountDir ];
+            targetDir = escapeShellArg (concatPaths [ persistentStoragePath dir ]);
+            mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
             systemctl = "XDG_RUNTIME_DIR=\${XDG_RUNTIME_DIR:-/run/user/$(id -u)} ${config.systemd.user.systemctlPath}";
           in
           ''
-            if [[ ! -e "${targetDir}" ]]; then
-                mkdir -p "${targetDir}"
+            if [[ ! -e ${targetDir} ]]; then
+                mkdir -p ${targetDir}
             fi
-            if [[ ! -e "${mountPoint}" ]]; then
-                mkdir -p "${mountPoint}"
+            if [[ ! -e ${mountPoint} ]]; then
+                mkdir -p ${mountPoint}
             fi
-            if ${pkgs.utillinux}/bin/mount | grep "${mountPoint}"; then
-                if ! ${pkgs.utillinux}/bin/mount | grep "${mountPoint}" | grep "${targetDir}"; then
+            if ${pkgs.utillinux}/bin/mount | grep -F ${mountPoint}' ' >/dev/null; then
+                if ! ${pkgs.utillinux}/bin/mount | grep -F ${mountPoint}' ' | grep -F ${targetDir} >/dev/null; then
                     # The target directory changed, so we need to remount
                     echo "remounting ${mountPoint}"
                     ${systemctl} --user stop bindMount-${sanitizeName targetDir}
-                    ${pkgs.bindfs}/bin/bindfs --no-allow-other "${targetDir}" "${mountPoint}"
-                    mountedPaths["${mountPoint}"]=1
+                    ${pkgs.bindfs}/bin/bindfs --no-allow-other ${targetDir} ${mountPoint}
+                    mountedPaths[${mountPoint}]=1
                 fi
+            elif ${pkgs.utillinux}/bin/mount | grep -F ${mountPoint}/ >/dev/null; then
+                echo "Something is mounted below ${mountPoint}, not creating bind mount to ${targetDir}" >&2
             else
-                ${pkgs.bindfs}/bin/bindfs --no-allow-other "${targetDir}" "${mountPoint}"
-                mountedPaths["${mountPoint}"]=1
+                ${pkgs.bindfs}/bin/bindfs --no-allow-other ${targetDir} ${mountPoint}
+                mountedPaths[${mountPoint}]=1
             fi
           '';
 
@@ -182,19 +186,19 @@ in
                 dirListToPath (tail (splitPath [ dir ]))
               else
                 dir;
-            mountPoint = concatPaths [ config.home.homeDirectory mountDir ];
+            mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
           in
           ''
-            if [[ -n ''${mountedPaths["${mountPoint}"]+x} ]]; then
+            if [[ -n ''${mountedPaths[${mountPoint}]+x} ]]; then
                 triesLeft=3
                 while (( triesLeft > 0 )); do
-                    if fusermount -u "${mountPoint}"; then
+                    if fusermount -u ${mountPoint}; then
                         break
                     else
                         (( triesLeft-- ))
                         if (( triesLeft == 0 )); then
                             echo "Couldn't perform regular unmount of ${mountPoint}. Attempting lazy unmount."
-                            fusermount -uz "${mountPoint}" || true
+                            fusermount -uz ${mountPoint} || true
                         else
                             sleep 1
                         fi
