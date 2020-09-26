@@ -78,9 +78,8 @@ in
             name = "bindMount-${sanitizeName targetDir}";
             startScript = pkgs.writeShellScript name ''
               set -eu
-              if ! ${pkgs.utillinux}/bin/mount | ${pkgs.gnugrep}/bin/grep -F ${mountPoint}' ' \
-                 && ! ${pkgs.utillinux}/bin/mount | ${pkgs.gnugrep}/bin/grep -F ${mountPoint}/; then
-                  ${pkgs.bindfs}/bin/bindfs -f --no-allow-other ${targetDir} ${mountPoint}
+              if ! mount | grep -F ${mountPoint}' ' && ! mount | grep -F ${mountPoint}/; then
+                  bindfs -f --no-allow-other ${targetDir} ${mountPoint}
               else
                   echo "There is already an active mount at or below ${mountPoint}!" >&2
                   exit 1
@@ -121,6 +120,7 @@ in
               Service = {
                 ExecStart = "${startScript}";
                 ExecStop = "${stopScript}";
+                Environment = "PATH=${makeBinPath (with pkgs; [ coreutils utillinux gnugrep bindfs ])}:/run/wrappers/bin";
               };
             };
           };
@@ -149,6 +149,8 @@ in
                 dir;
             targetDir = escapeShellArg (concatPaths [ persistentStoragePath dir ]);
             mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
+            mount = "${pkgs.utillinux}/bin/mount";
+            bindfs = "${pkgs.bindfs}/bin/bindfs";
             systemctl = "XDG_RUNTIME_DIR=\${XDG_RUNTIME_DIR:-/run/user/$(id -u)} ${config.systemd.user.systemctlPath}";
           in
           ''
@@ -158,18 +160,18 @@ in
             if [[ ! -e ${mountPoint} ]]; then
                 mkdir -p ${mountPoint}
             fi
-            if ${pkgs.utillinux}/bin/mount | grep -F ${mountPoint}' ' >/dev/null; then
-                if ! ${pkgs.utillinux}/bin/mount | grep -F ${mountPoint}' ' | grep -F ${targetDir} >/dev/null; then
+            if ${mount} | grep -F ${mountPoint}' ' >/dev/null; then
+                if ! ${mount} | grep -F ${mountPoint}' ' | grep -F ${targetDir} >/dev/null; then
                     # The target directory changed, so we need to remount
                     echo "remounting ${mountPoint}"
                     ${systemctl} --user stop bindMount-${sanitizeName targetDir}
-                    ${pkgs.bindfs}/bin/bindfs --no-allow-other ${targetDir} ${mountPoint}
+                    ${bindfs} --no-allow-other ${targetDir} ${mountPoint}
                     mountedPaths[${mountPoint}]=1
                 fi
-            elif ${pkgs.utillinux}/bin/mount | grep -F ${mountPoint}/ >/dev/null; then
+            elif ${mount} | grep -F ${mountPoint}/ >/dev/null; then
                 echo "Something is mounted below ${mountPoint}, not creating bind mount to ${targetDir}" >&2
             else
-                ${pkgs.bindfs}/bin/bindfs --no-allow-other ${targetDir} ${mountPoint}
+                ${bindfs} --no-allow-other ${targetDir} ${mountPoint}
                 mountedPaths[${mountPoint}]=1
             fi
           '';
