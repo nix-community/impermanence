@@ -108,7 +108,6 @@ in
             value = {
               Unit = {
                 Description = "Bind mount ${targetDir} at ${mountPoint}";
-                PartOf = [ "graphical-session-pre.target" ];
 
                 # Don't restart the unit, it could corrupt data and
                 # crash programs currently reading from the mount.
