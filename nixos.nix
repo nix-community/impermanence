@@ -87,11 +87,11 @@ in
 
     system.activationScripts =
       let
-        # Create a directory in persistent storage, so we can bind
+        # Script to create a directory in persistent storage, so we can bind
         # mount it. The directory structure's mode and ownership mirror those of
         # persistentStoragePath/dir;
         # TODO: Move this script to it's own file, add CI with shfmt/shellcheck.
-        mkDirWithPerms = persistentStoragePath: dir:
+        createDirectories = pkgs.writeShellScript "impermanence-create-directories"
           ''
             # Given a source directory, /source, and a target directory,
             # /target/foo/bar/bazz, we want to "clone" the target structure
@@ -108,10 +108,10 @@ in
             #   1. Ensure both /source/qualifiedPath and qualifiedPath exist
             #   2. Copy the ownership of the source path into the target path
             #   3. Copy the mode of the source path into the target path
-            (
-            # capture the nix vars into bash to avoid escape hell
-            sourceBase="${persistentStoragePath}"
-            target="${dir}"
+
+            # Get inputs from command line arguments
+            sourceBase="$1"
+            target="$2"
 
             # trim trailing slashes the root of all evil
             sourceBase="''${sourceBase%/}"
@@ -147,8 +147,11 @@ in
               # lastly we update the previousPath to continue down the tree
               previousPath="$currentTargetPath"
             done
-            )
           '';
+
+        mkDirWithPerms = persistentStoragePath: dir: ''
+          ${createDirectories} "${persistentStoragePath}" "${dir}"
+        '';
 
         # Build an activation script which creates all persistent
         # storage directories we want to bind mount.
