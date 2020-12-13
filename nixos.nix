@@ -19,6 +19,10 @@ in
               files = mkOption {
                 type = with types; listOf str;
                 default = [ ];
+                example = [
+                  "/etc/machine-id"
+                  "/etc/nix/id_rsa"
+                ];
                 description = ''
                   Files in /etc that should be stored in persistent storage.
                 '';
@@ -27,6 +31,12 @@ in
               directories = mkOption {
                 type = with types; listOf str;
                 default = [ ];
+                example = [
+                  "/var/log"
+                  "/var/lib/bluetooth"
+                  "/var/lib/systemd/coredump"
+                  "/etc/NetworkManager/system-connections"
+                ];
                 description = ''
                   Directories to bind mount to persistent storage.
                 '';
@@ -34,6 +44,14 @@ in
             };
         }
       );
+      description = ''
+        Persistent storage locations and the files and directories to
+        link to them. Each attribute name should be the full path to a
+        persistent storage location.
+
+        For detailed usage, check the <link
+        xlink:href="https://github.com/nix-community/impermanence">documentation</link>.
+      '';
     };
 
   };
