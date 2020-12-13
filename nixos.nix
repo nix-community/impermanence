@@ -120,11 +120,15 @@ in
         # Build an activation script which creates all persistent
         # storage directories we want to bind mount.
         mkDirCreationScriptForPath = persistentStoragePath:
+          let
+            directories = cfg.${persistentStoragePath}.directories;
+            files = unique (map dirOf cfg.${persistentStoragePath}.files);
+          in
           nameValuePair
             "createDirsIn-${replaceStrings [ "/" "." " " ] [ "-" "" "" ] persistentStoragePath}"
             (noDepEntry (concatMapStrings
               (mkDirWithPerms persistentStoragePath)
-              cfg.${persistentStoragePath}.directories
+              (directories ++ files)
             ));
       in
       listToAttrs (map mkDirCreationScriptForPath persistentStoragePaths);
