@@ -35,7 +35,7 @@ sourceBase="${sourceBase%/}"
 target="${target%/}"
 
 # check that the source exists and warn the user if it doesn't
-realSource="$(realpath "$sourceBase$target")"
+realSource="$(realpath -m "$sourceBase$target")"
 if [[ ! -d "$realSource" ]]; then
     printf "Warning: Source directory '%s' does not exist; it will be created for you. Make sure the permissions are correct!\n" "$realSource"
 fi
@@ -54,7 +54,7 @@ for pathPart in $(echo "$target" | tr "/" " "); do
     [[ -d "$currentTargetPath" ]] || mkdir "$currentTargetPath"
 
     # resolve the source path to avoid symlinks
-    currentRealSourcePath="$(realpath "$currentSourcePath")"
+    currentRealSourcePath="$(realpath -m "$currentSourcePath")"
 
     # synchronize perms between source and target
     chown --reference="$currentRealSourcePath" "$currentTargetPath"
