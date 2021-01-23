@@ -139,6 +139,15 @@ in
       let
         dag = config.lib.dag;
 
+        # The name of the activation script entry responsible for
+        # reloading systemd user services. The name was initially
+        # `reloadSystemD` but has been changed to `reloadSystemd`.
+        reloadSystemd =
+          if config.home.activation ? reloadSystemD then
+            "reloadSystemD"
+          else
+            "reloadSystemd";
+
         mkBindMount = persistentStoragePath: dir:
           let
             mountDir =
@@ -238,7 +247,7 @@ in
 
         runUnmountPersistentStoragePaths =
           dag.entryBefore
-            [ "reloadSystemD" ]
+            [ reloadSystemd ]
             ''
               unmountBindMounts
             '';
