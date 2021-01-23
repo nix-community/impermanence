@@ -169,12 +169,14 @@ in
                 mkdir -p ${mountPoint}
             fi
             if ${mount} | grep -F ${mountPoint}' ' >/dev/null; then
-                if ! ${mount} | grep -F ${mountPoint}' ' | grep -F ${targetDir} >/dev/null; then
-                    # The target directory changed, so we need to remount
-                    echo "remounting ${mountPoint}"
-                    ${systemctl} --user stop bindMount-${sanitizeName targetDir}
-                    ${bindfs} --no-allow-other ${targetDir} ${mountPoint}
-                    mountedPaths[${mountPoint}]=1
+                if ! ${mount} | grep -F ${mountPoint}' ' | grep -F bindfs; then
+                    if ! ${mount} | grep -F ${mountPoint}' ' | grep -F ${targetDir} >/dev/null; then
+                        # The target directory changed, so we need to remount
+                        echo "remounting ${mountPoint}"
+                        ${systemctl} --user stop bindMount-${sanitizeName targetDir}
+                        ${bindfs} --no-allow-other ${targetDir} ${mountPoint}
+                        mountedPaths[${mountPoint}]=1
+                    fi
                 fi
             elif ${mount} | grep -F ${mountPoint}/ >/dev/null; then
                 echo "Something is mounted below ${mountPoint}, not creating bind mount to ${targetDir}" >&2
