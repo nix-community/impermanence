@@ -101,6 +101,7 @@
           files = [
             ".screenrc"
           ];
+          allowOther = true;
         };
       }
     #+end_src
@@ -108,6 +109,10 @@
     - ~"/persistent/home/talyz"~ is the path to your persistent storage location
     - ~directories~ are all directories you want to link to persistent storage
     - ~files~ are all files you want to link to persistent storage
+    - ~allowOther~ allows other users, such as ~root~, to access files
+      through the bind mounted directories listed in
+      ~directories~. Useful for ~sudo~ operations, Docker, etc. Requires
+      the NixOS configuration ~programs.fuse.userAllowOther = true~.
 
     Additionally, the ~home-manager~ module allows for compatibility
     with ~dotfiles~ repos structured for use with [[https://www.gnu.org/software/stow/][GNU Stow]], where the

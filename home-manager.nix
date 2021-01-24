@@ -14,7 +14,7 @@ in
     home.persistence = mkOption {
       default = { };
       type = with types; attrsOf (
-        submodule {
+        submodule ({ name, ... }: {
           options =
             {
               directories = mkOption {
@@ -50,6 +50,30 @@ in
                 '';
               };
 
+              allowOther = mkOption {
+                type = with types; nullOr bool;
+                default = null;
+                example = true;
+                apply = x:
+                  if x == null then
+                    warn ''
+                      home.persistence."${name}".allowOther not set; assuming 'false'.
+                      See https://github.com/nix-community/impermanence#home-manager for more info.
+                    ''
+                      false
+                  else
+                    x;
+                description = ''
+                  Whether to allow other users, such as
+                  <literal>root</literal>, access to files through the
+                  bind mounted directories listed in
+                  <literal>directories</literal>. Requires the NixOS
+                  configuration parameter
+                  <literal>programs.fuse.userAllowOther</literal> to
+                  be <literal>true</literal>.
+                '';
+              };
+
               removePrefixDirectory = mkOption {
                 type = types.bool;
                 default = false;
@@ -67,7 +91,7 @@ in
                 '';
               };
             };
-        }
+        })
       );
     };
 
@@ -112,12 +136,15 @@ in
             mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
             name = "bindMount-${sanitizeName targetDir}";
             bindfsOptions = concatStringsSep "," (
-              optional (versionAtLeast pkgs.bindfs.version "1.14.9") "fsname=${targetDir}");
+              optional (!cfg.${persistentStoragePath}.allowOther) "no-allow-other"
+              ++ optional (versionAtLeast pkgs.bindfs.version "1.14.9") "fsname=${targetDir}"
+            );
             bindfsOptionFlag = optionalString (bindfsOptions != "") (" -o " + bindfsOptions);
+            bindfs = "bindfs -f" + bindfsOptionFlag;
             startScript = pkgs.writeShellScript name ''
               set -eu
               if ! mount | grep -F ${mountPoint}' ' && ! mount | grep -F ${mountPoint}/; then
-                  bindfs -f --no-allow-other ${bindfsOptionFlag} ${targetDir} ${mountPoint}
+                  ${bindfs} ${targetDir} ${mountPoint}
               else
                   echo "There is already an active mount at or below ${mountPoint}!" >&2
                   exit 1
@@ -197,9 +224,11 @@ in
             mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
             mount = "${pkgs.utillinux}/bin/mount";
             bindfsOptions = concatStringsSep "," (
-              optional (versionAtLeast pkgs.bindfs.version "1.14.9") "fsname=${targetDir}");
+              optional (!cfg.${persistentStoragePath}.allowOther) "no-allow-other"
+              ++ optional (versionAtLeast pkgs.bindfs.version "1.14.9") "fsname=${targetDir}"
+            );
             bindfsOptionFlag = optionalString (bindfsOptions != "") (" -o " + bindfsOptions);
-            bindfs = "${pkgs.bindfs}/bin/bindfs --no-allow-other" + bindfsOptionFlag;
+            bindfs = "${pkgs.bindfs}/bin/bindfs" + bindfsOptionFlag;
             systemctl = "XDG_RUNTIME_DIR=\${XDG_RUNTIME_DIR:-/run/user/$(id -u)} ${config.systemd.user.systemctlPath}";
           in
           ''
