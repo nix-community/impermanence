@@ -20,16 +20,51 @@ in
               directories = mkOption {
                 type = with types; listOf str;
                 default = [ ];
+                example = [
+                  "Downloads"
+                  "Music"
+                  "Pictures"
+                  "Documents"
+                  "Videos"
+                  "VirtualBox VMs"
+                  ".gnupg"
+                  ".ssh"
+                  ".local/share/keyrings"
+                  ".local/share/direnv"
+                ];
+                description = ''
+                  A list of directories in your home directory that
+                  you want to link to persistent storage.
+                '';
               };
 
               files = mkOption {
                 type = with types; listOf str;
                 default = [ ];
+                example = [
+                  ".screenrc"
+                ];
+                description = ''
+                  A list of files in your home directory you want to
+                  link to persistent storage.
+                '';
               };
 
               removePrefixDirectory = mkOption {
                 type = types.bool;
                 default = false;
+                example = true;
+                description = ''
+                  Note: This is mainly useful if you have a dotfiles
+                  repo structured for use with GNU Stow; if you don't,
+                  you can likely ignore it.
+
+                  Whether to remove the first directory when linking
+                  or mounting; e.g. for the path
+                  <literal>"screen/.screenrc"</literal>, the
+                  <literal>screen/</literal> is ignored for the path
+                  linked to in your home directory.
+                '';
               };
             };
         }

@@ -92,17 +92,14 @@
             "Documents"
             "Videos"
             "VirtualBox VMs"
-            ".gnupg/private-keys-v1.d"
+            ".gnupg"
             ".ssh"
             ".nixops"
             ".local/share/keyrings"
             ".local/share/direnv"
           ];
           files = [
-            ".gnupg/pubring.kbx"
-            ".gnupg/sshcontrol"
-            ".gnupg/trustdb.gpg"
-            ".gnupg/random_seed"
+            ".screenrc"
           ];
         };
       }
