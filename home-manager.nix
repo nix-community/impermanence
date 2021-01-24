@@ -76,10 +76,12 @@ in
             targetDir = escapeShellArg (concatPaths [ persistentStoragePath dir ]);
             mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
             name = "bindMount-${sanitizeName targetDir}";
+            bindfsOptions = concatStringsSep "," (
+              optional (versionAtLeast pkgs.bindfs.version "1.14.9") "fsname=${targetDir}");
             startScript = pkgs.writeShellScript name ''
               set -eu
               if ! mount | grep -F ${mountPoint}' ' && ! mount | grep -F ${mountPoint}/; then
-                  bindfs -f --no-allow-other ${targetDir} ${mountPoint}
+                  bindfs -f --no-allow-other -o ${bindfsOptions} ${targetDir} ${mountPoint}
               else
                   echo "There is already an active mount at or below ${mountPoint}!" >&2
                   exit 1
@@ -158,7 +160,9 @@ in
             targetDir = escapeShellArg (concatPaths [ persistentStoragePath dir ]);
             mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
             mount = "${pkgs.utillinux}/bin/mount";
-            bindfs = "${pkgs.bindfs}/bin/bindfs";
+            bindfsOptions = concatStringsSep "," (
+              optional (versionAtLeast pkgs.bindfs.version "1.14.9") "fsname=${targetDir}");
+            bindfs = "${pkgs.bindfs}/bin/bindfs --no-allow-other -o " + bindfsOptions;
             systemctl = "XDG_RUNTIME_DIR=\${XDG_RUNTIME_DIR:-/run/user/$(id -u)} ${config.systemd.user.systemctlPath}";
           in
           ''
@@ -170,7 +174,7 @@ in
             fi
             if ${mount} | grep -F ${mountPoint}' ' >/dev/null; then
                 if ! ${mount} | grep -F ${mountPoint}' ' | grep -F bindfs; then
-                    if ! ${mount} | grep -F ${mountPoint}' ' | grep -F ${targetDir} >/dev/null; then
+                    if ! ${mount} | grep -F ${mountPoint}' ' | grep -F ${targetDir}' ' >/dev/null; then
                         # The target directory changed, so we need to remount
                         echo "remounting ${mountPoint}"
                         ${systemctl} --user stop bindMount-${sanitizeName targetDir}
@@ -181,7 +185,7 @@ in
             elif ${mount} | grep -F ${mountPoint}/ >/dev/null; then
                 echo "Something is mounted below ${mountPoint}, not creating bind mount to ${targetDir}" >&2
             else
-                ${bindfs} --no-allow-other ${targetDir} ${mountPoint}
+                ${bindfs} ${targetDir} ${mountPoint}
                 mountedPaths[${mountPoint}]=1
             fi
           '';
