@@ -113,10 +113,11 @@ in
             name = "bindMount-${sanitizeName targetDir}";
             bindfsOptions = concatStringsSep "," (
               optional (versionAtLeast pkgs.bindfs.version "1.14.9") "fsname=${targetDir}");
+            bindfsOptionFlag = optionalString (bindfsOptions != "") (" -o " + bindfsOptions);
             startScript = pkgs.writeShellScript name ''
               set -eu
               if ! mount | grep -F ${mountPoint}' ' && ! mount | grep -F ${mountPoint}/; then
-                  bindfs -f --no-allow-other -o ${bindfsOptions} ${targetDir} ${mountPoint}
+                  bindfs -f --no-allow-other ${bindfsOptionFlag} ${targetDir} ${mountPoint}
               else
                   echo "There is already an active mount at or below ${mountPoint}!" >&2
                   exit 1
@@ -197,7 +198,8 @@ in
             mount = "${pkgs.utillinux}/bin/mount";
             bindfsOptions = concatStringsSep "," (
               optional (versionAtLeast pkgs.bindfs.version "1.14.9") "fsname=${targetDir}");
-            bindfs = "${pkgs.bindfs}/bin/bindfs --no-allow-other -o " + bindfsOptions;
+            bindfsOptionFlag = optionalString (bindfsOptions != "") (" -o " + bindfsOptions);
+            bindfs = "${pkgs.bindfs}/bin/bindfs --no-allow-other" + bindfsOptionFlag;
             systemctl = "XDG_RUNTIME_DIR=\${XDG_RUNTIME_DIR:-/run/user/$(id -u)} ${config.systemd.user.systemctlPath}";
           in
           ''
@@ -213,7 +215,7 @@ in
                         # The target directory changed, so we need to remount
                         echo "remounting ${mountPoint}"
                         ${systemctl} --user stop bindMount-${sanitizeName targetDir}
-                        ${bindfs} --no-allow-other ${targetDir} ${mountPoint}
+                        ${bindfs} ${targetDir} ${mountPoint}
                         mountedPaths[${mountPoint}]=1
                     fi
                 fi
