@@ -157,7 +157,7 @@ in
               Service = {
                 ExecStart = "${startScript}";
                 ExecStop = "${stopScript}";
-                Environment = "PATH=${makeBinPath (with pkgs; [ coreutils utillinux gnugrep bindfs ])}:/run/wrappers/bin";
+                Environment = "PATH=${makeBinPath [ pkgs.coreutils pkgs.utillinux pkgs.gnugrep pkgs.bindfs ]}:/run/wrappers/bin";
               };
             };
           };
