@@ -232,12 +232,9 @@ in
             systemctl = "XDG_RUNTIME_DIR=\${XDG_RUNTIME_DIR:-/run/user/$(id -u)} ${config.systemd.user.systemctlPath}";
           in
           ''
-            if [[ ! -e ${targetDir} ]]; then
-                mkdir -p ${targetDir}
-            fi
-            if [[ ! -e ${mountPoint} ]]; then
-                mkdir -p ${mountPoint}
-            fi
+            mkdir -p ${targetDir}
+            mkdir -p ${mountPoint}
+
             if ${mount} | grep -F ${mountPoint}' ' >/dev/null; then
                 if ! ${mount} | grep -F ${mountPoint}' ' | grep -F bindfs; then
                     if ! ${mount} | grep -F ${mountPoint}' ' | grep -F ${targetDir}' ' >/dev/null; then
