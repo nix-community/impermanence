@@ -144,6 +144,7 @@ in
             startScript = pkgs.writeShellScript name ''
               set -eu
               if ! mount | grep -F ${mountPoint}' ' && ! mount | grep -F ${mountPoint}/; then
+                  mkdir -p ${mountPoint}
                   ${bindfs} ${targetDir} ${mountPoint}
               else
                   echo "There is already an active mount at or below ${mountPoint}!" >&2
