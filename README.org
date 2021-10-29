@@ -68,6 +68,10 @@
     is now under ~home~, rather than ~environment~, and the addition of
     the submodule option ~removePrefixDirectory~.
 
+    /Important note:/ You have to use the ~home-manager~ ~NixOS~ module (in
+    the ~nixos~ directory of ~home-manager~'s repo) in order for this
+    module to work as intended.
+
     To use the module, import it into your configuration with
 
     #+begin_src nix
