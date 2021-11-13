@@ -18,7 +18,7 @@ jobs:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Check Nix formatting
         run: |
-          nix run nixpkgs.nixpkgs-fmt -c nixpkgs-fmt --check .
+          nix-shell -p nixpkgs-fmt --run "nixpkgs-fmt --check ."
   shell_formatting:
     runs-on: ubuntu-latest
     steps:
@@ -28,7 +28,7 @@ jobs:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Check shell script formatting
         run: |
-          find . -name "*.*sh" -exec nix run nixpkgs.shfmt -c shfmt -i 4 -d {} +
+          find . -name "*.*sh" -exec nix-shell -p shfmt --run "shfmt -i 4 -d {}" \;
   shell_error_checking:
     runs-on: ubuntu-latest
     steps:
@@ -38,4 +38,4 @@ jobs:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Check for shell script errors
         run: |
-          find . -name "*.*sh" -exec nix run nixpkgs.shellcheck -c shellcheck {} +
+          find . -name "*.*sh" -exec nix-shell -p shellcheck --run "shellcheck {}" \;
