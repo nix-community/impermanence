@@ -293,35 +293,50 @@ in
             cfg.${persistentStoragePath}.directories;
 
       in
-      mkIf (any (path: cfg.${path}.directories != [ ]) persistentStoragePaths) {
-        createAndMountPersistentStoragePaths =
-          dag.entryBefore
-            [ "writeBoundary" ]
-            ''
-              declare -A mountedPaths
-              ${(concatMapStrings mkBindMountsForPath persistentStoragePaths)}
-            '';
+      mkMerge [
+        (mkIf (any (path: cfg.${path}.directories != [ ]) persistentStoragePaths) {
+          createAndMountPersistentStoragePaths =
+            dag.entryBefore
+              [ "writeBoundary" ]
+              ''
+                declare -A mountedPaths
+                ${(concatMapStrings mkBindMountsForPath persistentStoragePaths)}
+              '';
 
-        unmountPersistentStoragePaths =
-          dag.entryBefore
-            [ "createAndMountPersistentStoragePaths" ]
-            ''
-              unmountBindMounts() {
-              ${concatMapStrings mkUnmountsForPath persistentStoragePaths}
-              }
+          unmountPersistentStoragePaths =
+            dag.entryBefore
+              [ "createAndMountPersistentStoragePaths" ]
+              ''
+                unmountBindMounts() {
+                ${concatMapStrings mkUnmountsForPath persistentStoragePaths}
+                }
 
-              # Run the unmount function on error to clean up stray
-              # bind mounts
-              trap "unmountBindMounts" ERR
-            '';
+                # Run the unmount function on error to clean up stray
+                # bind mounts
+                trap "unmountBindMounts" ERR
+              '';
 
-        runUnmountPersistentStoragePaths =
-          dag.entryBefore
-            [ reloadSystemd ]
-            ''
-              unmountBindMounts
-            '';
-      };
+          runUnmountPersistentStoragePaths =
+            dag.entryBefore
+              [ reloadSystemd ]
+              ''
+                unmountBindMounts
+              '';
+        })
+        (mkIf (any (path: cfg.${path}.files != [ ]) persistentStoragePaths) {
+          createTargetFileDirectories =
+            dag.entryBefore
+              [ "writeBoundary" ]
+              (concatMapStrings
+                (persistentStoragePath:
+                  concatMapStrings
+                    (targetFilePath: ''
+                      mkdir -p ${concatPaths [ persistentStoragePath (dirOf targetFilePath) ]}
+                    '')
+                    cfg.${persistentStoragePath}.files)
+                persistentStoragePaths);
+        })
+      ];
   };
 
 }
