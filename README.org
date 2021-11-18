@@ -51,7 +51,7 @@
 
     - ~"/persistent"~ is the path to your persistent storage location
     - ~directories~ are all directories you want to bind mount to persistent storage
-    - ~files~ are all files you want to link to persistent storage (only in ~/etc~ for now)
+    - ~files~ are all files you want to link to persistent storage
 
     This allows for multiple different persistent storage
     locations. If you, for example, have one location you back up and

@@ -4,8 +4,23 @@ with lib;
 let
   cfg = config.environment.persistence;
   persistentStoragePaths = attrNames cfg;
+  mkMountScript = mountPoint: targetFile: ''
+    if [[ -L ${mountPoint} && $(readlink -f ${mountPoint}) == ${targetFile} ]]; then
+        echo "${mountPoint} already links to ${targetFile}, ignoring"
+    elif mount | grep -F ${mountPoint}' ' >/dev/null && ! mount | grep -F ${mountPoint}/ >/dev/null; then
+        echo "mount already exists at ${mountPoint}, ignoring"
+    elif [[ -e ${mountPoint} ]]; then
+        echo "A file already exists at ${mountPoint}!" >&2
+        exit 1
+    elif [[ -e ${targetFile} ]]; then
+        touch ${mountPoint}
+        mount -o bind ${targetFile} ${mountPoint}
+    else
+        ln -s ${targetFile} ${mountPoint}
+    fi
+  '';
 
-  inherit (pkgs.callPackage ./lib.nix { }) splitPath dirListToPath concatPaths;
+  inherit (pkgs.callPackage ./lib.nix { }) splitPath dirListToPath concatPaths sanitizeName;
 in
 {
   options = {
@@ -57,29 +72,44 @@ in
   };
 
   config = {
-    environment.etc =
+    systemd.services =
       let
-        link = file:
-          pkgs.runCommand
-            "${replaceStrings [ "/" "." " " ] [ "-" "" "" ] file}"
-            { }
-            "ln -s '${file}' $out";
+        mkPersistFileService = persistentStoragePath: file:
+          let
+            targetFile = escapeShellArg (concatPaths [ persistentStoragePath file ]);
+            mountPoint = escapeShellArg file;
+          in
+          {
+            "persist-${sanitizeName targetFile}" = {
+              description = "Bind mount or link ${targetFile} to ${mountPoint}";
+              wantedBy = [ "local-fs.target" ];
+              before = [ "local-fs.target" ];
+              path = [ pkgs.utillinux ];
+              unitConfig.DefaultDependencies = false;
+              serviceConfig = {
+                Type = "oneshot";
+                RemainAfterExit = true;
+                ExecStart = pkgs.writeShellScript "bindOrLink-${sanitizeName targetFile}" ''
+                  set -eu
+                  ${mkMountScript mountPoint targetFile}
+                '';
+                ExecStop = pkgs.writeShellScript "unbindOrUnlink-${sanitizeName targetFile}" ''
+                  set -eu
+                  if [[ -L ${mountPoint} ]]; then
+                      rm ${mountPoint}
+                  else
+                      umount ${mountPoint}
+                      rm ${mountPoint}
+                  fi
+                '';
+              };
+            };
+          };
 
-        # Create environment.etc link entry.
-        mkLinkNameValuePair = persistentStoragePath: file: {
-          name = removePrefix "/etc/" file;
-          value = { source = link (concatPaths [ persistentStoragePath file ]); };
-        };
-
-        # Create all environment.etc link entries for a specific
-        # persistent storage path.
-        mkLinksToPersistentStorage = persistentStoragePath:
-          listToAttrs (map
-            (mkLinkNameValuePair persistentStoragePath)
-            cfg.${persistentStoragePath}.files
-          );
+        mkServicesForPersistentStoragePath = persistentStoragePath:
+          foldl' recursiveUpdate { } (map (mkPersistFileService persistentStoragePath) cfg.${persistentStoragePath}.files);
       in
-      foldl' recursiveUpdate { } (map mkLinksToPersistentStorage persistentStoragePaths);
+      foldl' recursiveUpdate { } (map mkServicesForPersistentStoragePath persistentStoragePaths);
 
     fileSystems =
       let
@@ -124,14 +154,34 @@ in
             directories = cfg.${persistentStoragePath}.directories;
             files = unique (map dirOf cfg.${persistentStoragePath}.files);
           in
-          nameValuePair
-            "createDirsIn-${replaceStrings [ "/" "." " " ] [ "-" "" "" ] persistentStoragePath}"
-            (noDepEntry (concatMapStrings
-              (mkDirWithPerms persistentStoragePath)
-              (directories ++ files)
-            ));
+          {
+            "createDirsIn-${replaceStrings [ "/" "." " " ] [ "-" "" "" ] persistentStoragePath}" =
+              noDepEntry (concatMapStrings
+                (mkDirWithPerms persistentStoragePath)
+                (directories ++ files));
+          };
+
+        dirCreationScripts = foldl' recursiveUpdate { } (map mkDirCreationScriptForPath persistentStoragePaths);
+
+        persistFileScript = persistentStoragePath: file:
+          let
+            targetFile = escapeShellArg (concatPaths [ persistentStoragePath file ]);
+            mountPoint = escapeShellArg file;
+          in
+          {
+            "persist-${sanitizeName targetFile}" = {
+              deps = [ "createDirsIn-${replaceStrings [ "/" "." " " ] [ "-" "" "" ] persistentStoragePath}" ];
+              text = mkMountScript mountPoint targetFile;
+            };
+          };
+
+        mkPersistFileScripts = persistentStoragePath:
+          foldl' recursiveUpdate { } (map (persistFileScript persistentStoragePath) cfg.${persistentStoragePath}.files);
+
+        persistFileScripts =
+          foldl' recursiveUpdate { } (map mkPersistFileScripts persistentStoragePaths);
       in
-      listToAttrs (map mkDirCreationScriptForPath persistentStoragePaths);
+      dirCreationScripts // persistFileScripts;
 
     assertions =
       let
@@ -143,22 +193,6 @@ in
             cond;
       in
       [
-        {
-          # Assert that files are put in /etc, a current limitation,
-          # since we're using environment.etc.
-          assertion = all (hasPrefix "/etc") files;
-          message =
-            let
-              offenders = filter (file: !(hasPrefix "/etc" file)) files;
-            in
-            ''
-              environment.persistence.files:
-                  Currently, only files in /etc are supported.
-
-                  Please fix or remove the following paths:
-                    ${concatStringsSep "\n      " offenders}
-            '';
-        }
         {
           # Assert that all persistent storage volumes we use are
           # marked with neededForBoot.
