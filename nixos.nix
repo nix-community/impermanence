@@ -120,6 +120,7 @@ in
             device = concatPaths [ persistentStoragePath dir ];
             noCheck = true;
             options = [ "bind" ];
+            depends = [ persistentStoragePath ];
           };
         };
 
