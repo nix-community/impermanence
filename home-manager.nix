@@ -140,7 +140,7 @@ in
               ++ optional (versionAtLeast pkgs.bindfs.version "1.14.9") "fsname=${targetDir}"
             );
             bindfsOptionFlag = optionalString (bindfsOptions != "") (" -o " + bindfsOptions);
-            bindfs = "bindfs -f" + bindfsOptionFlag;
+            bindfs = "bindfs" + bindfsOptionFlag;
             startScript = pkgs.writeShellScript name ''
               set -eu
               if ! mount | grep -F ${mountPoint}' ' && ! mount | grep -F ${mountPoint}/; then
@@ -183,6 +183,7 @@ in
               Install.WantedBy = [ "default.target" ];
 
               Service = {
+                Type = "forking";
                 ExecStart = "${startScript}";
                 ExecStop = "${stopScript}";
                 Environment = "PATH=${makeBinPath [ pkgs.coreutils pkgs.utillinux pkgs.gnugrep pkgs.bindfs ]}:/run/wrappers/bin";
