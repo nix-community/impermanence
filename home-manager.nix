@@ -178,9 +178,21 @@ in
                 # Don't restart the unit, it could corrupt data and
                 # crash programs currently reading from the mount.
                 X-RestartIfChanged = false;
+
+                # Don't add an implicit After=basic.target.
+                DefaultDependencies = false;
+
+                Before = [
+                  "bluetooth.target"
+                  "basic.target"
+                  "default.target"
+                  "paths.target"
+                  "sockets.target"
+                  "timers.target"
+                ];
               };
 
-              Install.WantedBy = [ "default.target" ];
+              Install.WantedBy = [ "paths.target" ];
 
               Service = {
                 Type = "forking";
