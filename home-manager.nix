@@ -344,7 +344,7 @@ in
                 (persistentStoragePath:
                   concatMapStrings
                     (targetFilePath: ''
-                      mkdir -p ${concatPaths [ persistentStoragePath (dirOf targetFilePath) ]}
+                      mkdir -p ${escapeShellArg (concatPaths [ persistentStoragePath (dirOf targetFilePath) ])}
                     '')
                     cfg.${persistentStoragePath}.files)
                 persistentStoragePaths);
