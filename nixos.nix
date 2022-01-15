@@ -1,9 +1,17 @@
 { pkgs, config, lib, ... }:
 
-with lib;
 let
+  inherit (lib) attrNames attrValues zipAttrsWith flatten mkOption
+    types foldl' unique noDepEntry concatMapStrings listToAttrs
+    escapeShellArg escapeShellArgs replaceStrings recursiveUpdate all
+    filter concatStringsSep isString;
+
+  inherit (pkgs.callPackage ./lib.nix { }) splitPath dirListToPath
+    concatPaths sanitizeName;
+
   cfg = config.environment.persistence;
-  persistentStoragePaths = attrNames cfg;
+  allPersistentStoragePaths = zipAttrsWith (_name: flatten) (attrValues cfg);
+  inherit (allPersistentStoragePaths) files directories;
   mkMountScript = mountPoint: targetFile: ''
     if [[ -L ${mountPoint} && $(readlink -f ${mountPoint}) == ${targetFile} ]]; then
         echo "${mountPoint} already links to ${targetFile}, ignoring"
@@ -19,46 +27,104 @@ let
         ln -s ${targetFile} ${mountPoint}
     fi
   '';
-
-  inherit (pkgs.callPackage ./lib.nix { }) splitPath dirListToPath concatPaths sanitizeName;
 in
 {
   options = {
 
     environment.persistence = mkOption {
       default = { };
-      type = with types; attrsOf (
-        submodule {
-          options =
+      type =
+        let
+          inherit (types) attrsOf listOf submodule path either str;
+        in
+        attrsOf (
+          submodule (
+            { name, ... }:
+            let
+              persistentStoragePath = name;
+              commonOpts = {
+                options = {
+                  persistentStoragePath = mkOption {
+                    type = path;
+                    default = persistentStoragePath;
+                    description = ''
+                      The path to persistent storage where the real
+                      file should be stored.
+                    '';
+                  };
+                };
+              };
+              fileOpts = {
+                options = {
+                  file = mkOption {
+                    type = str;
+                    description = ''
+                      The path to the file.
+                    '';
+                  };
+                };
+              };
+              dirOpts = {
+                options = {
+                  directory = mkOption {
+                    type = str;
+                    description = ''
+                      The path to the directory.
+                    '';
+                  };
+                };
+              };
+              file = submodule [ commonOpts fileOpts ];
+              dir = submodule [ commonOpts dirOpts ];
+            in
             {
-              files = mkOption {
-                type = with types; listOf str;
-                default = [ ];
-                example = [
-                  "/etc/machine-id"
-                  "/etc/nix/id_rsa"
-                ];
-                description = ''
-                  Files in /etc that should be stored in persistent storage.
-                '';
-              };
+              options =
+                {
+                  files = mkOption {
+                    type = listOf (either str file);
+                    default = [ ];
+                    example = [
+                      "/etc/machine-id"
+                      "/etc/nix/id_rsa"
+                    ];
+                    description = ''
+                      Files that should be stored in persistent storage.
+                    '';
+                    apply =
+                      map (file:
+                        if isString file then
+                          {
+                            inherit file persistentStoragePath;
+                          }
+                        else
+                          file);
+                  };
 
-              directories = mkOption {
-                type = with types; listOf str;
-                default = [ ];
-                example = [
-                  "/var/log"
-                  "/var/lib/bluetooth"
-                  "/var/lib/systemd/coredump"
-                  "/etc/NetworkManager/system-connections"
-                ];
-                description = ''
-                  Directories to bind mount to persistent storage.
-                '';
-              };
-            };
-        }
-      );
+                  directories = mkOption {
+                    type = listOf (either str dir);
+                    default = [ ];
+                    example = [
+                      "/var/log"
+                      "/var/lib/bluetooth"
+                      "/var/lib/systemd/coredump"
+                      "/etc/NetworkManager/system-connections"
+                    ];
+                    description = ''
+                      Directories to bind mount to persistent storage.
+                    '';
+                    apply =
+                      map (directory:
+                        if isString directory then
+                          {
+                            inherit directory persistentStoragePath;
+                          }
+                        else
+                          directory);
+                  };
+                };
+            }
+          )
+        );
       description = ''
         Persistent storage locations and the files and directories to
         link to them. Each attribute name should be the full path to a
@@ -74,7 +140,7 @@ in
   config = {
     systemd.services =
       let
-        mkPersistFileService = persistentStoragePath: file:
+        mkPersistFileService = { file, persistentStoragePath }:
           let
             targetFile = escapeShellArg (concatPaths [ persistentStoragePath file ]);
             mountPoint = escapeShellArg file;
@@ -105,19 +171,16 @@ in
               };
             };
           };
-
-        mkServicesForPersistentStoragePath = persistentStoragePath:
-          foldl' recursiveUpdate { } (map (mkPersistFileService persistentStoragePath) cfg.${persistentStoragePath}.files);
       in
-      foldl' recursiveUpdate { } (map mkServicesForPersistentStoragePath persistentStoragePaths);
+      foldl' recursiveUpdate { } (map mkPersistFileService files);
 
     fileSystems =
       let
         # Create fileSystems bind mount entry.
-        mkBindMountNameValuePair = persistentStoragePath: dir: {
-          name = concatPaths [ "/" dir ];
+        mkBindMountNameValuePair = { directory, persistentStoragePath }: {
+          name = concatPaths [ "/" directory ];
           value = {
-            device = concatPaths [ persistentStoragePath dir ];
+            device = concatPaths [ persistentStoragePath directory ];
             noCheck = true;
             options = [ "bind" ];
           };
@@ -125,13 +188,8 @@ in
 
         # Create all fileSystems bind mount entries for a specific
         # persistent storage path.
-        mkBindMountsForPath = persistentStoragePath:
-          listToAttrs (map
-            (mkBindMountNameValuePair persistentStoragePath)
-            cfg.${persistentStoragePath}.directories
-          );
       in
-      foldl' recursiveUpdate { } (map mkBindMountsForPath persistentStoragePaths);
+      listToAttrs (map mkBindMountNameValuePair directories);
 
     system.activationScripts =
       let
@@ -143,54 +201,55 @@ in
           patchShebangs $out
         '';
 
-        mkDirWithPerms = persistentStoragePath: dir: ''
-          ${createDirectories} "${persistentStoragePath}" "${dir}"
+        mkDirWithPerms = { directory, persistentStoragePath }: ''
+          ${createDirectories} ${escapeShellArgs [persistentStoragePath directory]}
         '';
 
         # Build an activation script which creates all persistent
         # storage directories we want to bind mount.
-        mkDirCreationScriptForPath = persistentStoragePath:
+        dirCreationScripts =
           let
-            directories = cfg.${persistentStoragePath}.directories;
-            files = unique (map dirOf cfg.${persistentStoragePath}.files);
+            inherit directories;
+            fileDirectories = unique (map
+              (f:
+                {
+                  directory = dirOf f.file;
+                  inherit (f) persistentStoragePath;
+                })
+              files);
           in
           {
-            "createDirsIn-${replaceStrings [ "/" "." " " ] [ "-" "" "" ] persistentStoragePath}" =
+            "createPersistentStorageDirs" =
               noDepEntry (concatMapStrings
-                (mkDirWithPerms persistentStoragePath)
-                (directories ++ files));
+                mkDirWithPerms
+                (directories ++ fileDirectories));
           };
 
-        dirCreationScripts = foldl' recursiveUpdate { } (map mkDirCreationScriptForPath persistentStoragePaths);
-
-        persistFileScript = persistentStoragePath: file:
+        persistFileScript = { file, persistentStoragePath }:
           let
             targetFile = escapeShellArg (concatPaths [ persistentStoragePath file ]);
             mountPoint = escapeShellArg file;
           in
           {
             "persist-${sanitizeName targetFile}" = {
-              deps = [ "createDirsIn-${replaceStrings [ "/" "." " " ] [ "-" "" "" ] persistentStoragePath}" ];
+              deps = [ "createPersistentStorageDirs" ];
               text = mkMountScript mountPoint targetFile;
             };
           };
 
-        mkPersistFileScripts = persistentStoragePath:
-          foldl' recursiveUpdate { } (map (persistFileScript persistentStoragePath) cfg.${persistentStoragePath}.files);
-
         persistFileScripts =
-          foldl' recursiveUpdate { } (map mkPersistFileScripts persistentStoragePaths);
+          foldl' recursiveUpdate { } (map persistFileScript files);
       in
       dirCreationScripts // persistFileScripts;
 
     assertions =
       let
-        files = concatMap (p: p.files or [ ]) (attrValues cfg);
         markedNeededForBoot = cond: fs:
           if config.fileSystems ? ${fs} then
-            (config.fileSystems.${fs}.neededForBoot == cond)
+            config.fileSystems.${fs}.neededForBoot == cond
           else
             cond;
+        persistentStoragePaths = attrNames cfg;
       in
       [
         {
