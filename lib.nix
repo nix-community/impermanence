@@ -1,6 +1,9 @@
 { lib }:
-with lib;
 let
+  inherit (lib) filter concatMap concatStringsSep hasPrefix head
+    replaceStrings optionalString removePrefix foldl' elem;
+  inherit (lib.strings) sanitizeDerivationName;
+
   # ["/home/user/" "/.screenrc"] -> ["home" "user" ".screenrc"]
   splitPath = paths:
     (filter
@@ -22,6 +25,6 @@ let
   sanitizeName = name:
     replaceStrings
       [ "." ] [ "" ]
-      (strings.sanitizeDerivationName (removePrefix "/" name));
+      (sanitizeDerivationName (removePrefix "/" name));
 in
 { inherit splitPath dirListToPath concatPaths sanitizeName; }
