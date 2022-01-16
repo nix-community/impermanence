@@ -45,18 +45,56 @@
             "/etc/machine-id"
             "/etc/nix/id_rsa"
           ];
+          users.talyz = {
+            directories = [
+              "Downloads"
+              "Music"
+              "Pictures"
+              "Documents"
+              "Videos"
+              "VirtualBox VMs"
+              ".gnupg"
+              ".ssh"
+              ".nixops"
+              ".local/share/keyrings"
+              ".local/share/direnv"
+            ];
+            files = [
+              ".screenrc"
+            ];
+          };
         };
       }
     #+end_src
 
     - ~"/persistent"~ is the path to your persistent storage location
-    - ~directories~ are all directories you want to bind mount to persistent storage
-    - ~files~ are all files you want to link to persistent storage
 
-    This allows for multiple different persistent storage
-    locations. If you, for example, have one location you back up and
-    one you don't, you can use both by defining two separate
-    attributes under ~environment.persistence~.
+      This allows for multiple different persistent storage
+      locations. If you, for example, have one location you back up
+      and one you don't, you can use both by defining two separate
+      attributes under ~environment.persistence~.
+
+    - ~directories~ are all directories you want to bind mount to
+      persistent storage
+
+    - ~files~ are all files you want to link or bind to persistent
+      storage
+
+      If the file exists in persistent storage, it will be bind
+      mounted to the target path; otherwise it will be symlinked.
+
+    - ~users.talyz~ handles files and directories in ~talyz~'s home
+      directory
+
+      The ~users~ option defines a set of submodules which correspond to
+      the users' names. The ~directories~ and ~files~ options of each
+      submodule work like their root counterparts, but the paths are
+      automatically prefixed with with the user's home directory.
+
+      If the user has a non-standard home directory (i.e. not
+      ~/home/<username>~), the ~users.<username>.home~ option has to be
+      set to this path - it can't currently be automatically deduced
+      due to a limitation in ~nixpkgs~.
 
     /Important note:/ Make sure your persistent volumes are marked with
     ~neededForBoot~, otherwise you will run into problems.
