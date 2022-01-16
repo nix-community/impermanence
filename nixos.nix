@@ -4,7 +4,8 @@ let
   inherit (lib) attrNames attrValues zipAttrsWith flatten mkOption
     types foldl' unique noDepEntry concatMapStrings listToAttrs
     escapeShellArg escapeShellArgs replaceStrings recursiveUpdate all
-    filter concatStringsSep isString catAttrs;
+    filter filterAttrs concatStringsSep concatMapStringsSep isString
+    catAttrs;
 
   inherit (pkgs.callPackage ./lib.nix { }) splitPath dirListToPath
     concatPaths sanitizeName duplicates;
@@ -39,7 +40,7 @@ in
         in
         attrsOf (
           submodule (
-            { name, ... }:
+            { name, config, ... }:
             let
               persistentStoragePath = name;
               commonOpts = {
@@ -80,6 +81,83 @@ in
             {
               options =
                 {
+                  users = mkOption {
+                    type = attrsOf (
+                      submodule (
+                        { name, config, ... }: {
+                          options =
+                            {
+                              # Needed because defining fileSystems
+                              # based on values from users.users
+                              # results in infinite recursion.
+                              home = mkOption {
+                                type = path;
+                                default = "/home/${name}";
+                                defaultText = "/home/<username>";
+                                description = ''
+                                  The user's home directory. Only
+                                  useful for users with a custom home
+                                  directory path.
+
+                                  Cannot currently be automatically
+                                  deduced due to a limitation in
+                                  nixpkgs.
+                                '';
+                              };
+                              files = mkOption {
+                                type = listOf (either str file);
+                                default = [ ];
+                                example = [
+                                  ".screenrc"
+                                ];
+                                description = ''
+                                  Files that should be stored in
+                                  persistent storage.
+                                '';
+                                apply =
+                                  map (file:
+                                    if isString file then
+                                      {
+                                        file = concatPaths [ config.home file ];
+                                      }
+                                    else
+                                      file // {
+                                        file = concatPaths [ config.home file.file ];
+                                      });
+                              };
+
+                              directories = mkOption {
+                                type = listOf (either str dir);
+                                default = [ ];
+                                example = [
+                                  "Downloads"
+                                  "Music"
+                                  "Pictures"
+                                  "Documents"
+                                  "Videos"
+                                ];
+                                description = ''
+                                  Directories to bind mount to
+                                  persistent storage.
+                                '';
+                                apply =
+                                  map (directory:
+                                    if isString directory then
+                                      {
+                                        directory = concatPaths [ config.home directory ];
+                                      }
+                                    else
+                                      directory // {
+                                        directory = concatPaths [ config.home directory.directory ];
+                                      });
+                              };
+                            };
+                        }
+                      )
+                    );
+                    default = { };
+                  };
+
                   files = mkOption {
                     type = listOf (either str file);
                     default = [ ];
@@ -121,6 +199,14 @@ in
                         else
                           directory);
                   };
+                };
+              config =
+                let
+                  allUsers = zipAttrsWith (_name: flatten) (attrValues config.users);
+                in
+                {
+                  files = allUsers.files or [ ];
+                  directories = allUsers.directories or [ ];
                 };
             }
           )
@@ -250,6 +336,10 @@ in
           else
             cond;
         persistentStoragePaths = attrNames cfg;
+        usersPerPath = allPersistentStoragePaths.users;
+        homeDirOffenders =
+          filterAttrs
+            (n: v: (v.home != config.users.users.${n}.home));
       in
       [
         {
@@ -267,6 +357,32 @@ in
 
                   Please fix or remove the following paths:
                     ${concatStringsSep "\n      " offenders}
+            '';
+        }
+        {
+          assertion = all (users: (homeDirOffenders users) == { }) usersPerPath;
+          message =
+            let
+              offendersPerPath = filter (users: (homeDirOffenders users) != { }) usersPerPath;
+              offendersText =
+                concatMapStringsSep
+                  "\n      "
+                  (offenders:
+                    concatMapStringsSep
+                      "\n      "
+                      (n: "${n}: ${offenders.${n}.home} != ${config.users.users.${n}.home}")
+                      (attrNames offenders))
+                  offendersPerPath;
+            in
+            ''
+              environment.persistence:
+                  Users and home doesn't match:
+                    ${offendersText}
+
+                  You probably want to set each
+                  environment.persistence.<path>.users.<user>.home to
+                  match the respective user's home directory as
+                  defined by users.users.<user>.home.
             '';
         }
         {
