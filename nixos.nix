@@ -4,10 +4,10 @@ let
   inherit (lib) attrNames attrValues zipAttrsWith flatten mkOption
     types foldl' unique noDepEntry concatMapStrings listToAttrs
     escapeShellArg escapeShellArgs replaceStrings recursiveUpdate all
-    filter concatStringsSep isString;
+    filter concatStringsSep isString catAttrs;
 
   inherit (pkgs.callPackage ./lib.nix { }) splitPath dirListToPath
-    concatPaths sanitizeName;
+    concatPaths sanitizeName duplicates;
 
   cfg = config.environment.persistence;
   allPersistentStoragePaths = zipAttrsWith (_name: flatten) (attrValues cfg);
@@ -266,6 +266,32 @@ in
                   have the flag neededForBoot set to true.
 
                   Please fix or remove the following paths:
+                    ${concatStringsSep "\n      " offenders}
+            '';
+        }
+        {
+          assertion = duplicates (catAttrs "file" files) == [ ];
+          message =
+            let
+              offenders = duplicates (catAttrs "file" files);
+            in
+            ''
+              environment.persistence:
+                  The following files were specified two or more
+                  times:
+                    ${concatStringsSep "\n      " offenders}
+            '';
+        }
+        {
+          assertion = duplicates (catAttrs "directory" directories) == [ ];
+          message =
+            let
+              offenders = duplicates (catAttrs "directory" directories);
+            in
+            ''
+              environment.persistence:
+                  The following directories were specified two or more
+                  times:
                     ${concatStringsSep "\n      " offenders}
             '';
         }
