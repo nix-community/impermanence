@@ -32,7 +32,7 @@ in
           options =
             {
               files = mkOption {
-                type = with types; listOf str;
+                type = with types; listOf path;
                 default = [ ];
                 example = [
                   "/etc/machine-id"
@@ -44,7 +44,7 @@ in
               };
 
               directories = mkOption {
-                type = with types; listOf str;
+                type = with types; listOf path;
                 default = [ ];
                 example = [
                   "/var/log"
