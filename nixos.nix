@@ -11,6 +11,7 @@ let
     concatPaths sanitizeName duplicates;
 
   cfg = config.environment.persistence;
+  users = config.users.users;
   allPersistentStoragePaths = zipAttrsWith (_name: flatten) (attrValues cfg);
   inherit (allPersistentStoragePaths) files directories;
   mkMountScript = mountPoint: targetFile: ''
@@ -43,6 +44,11 @@ in
             { name, config, ... }:
             let
               persistentStoragePath = name;
+              defaultPerms = {
+                mode = "0755";
+                user = "root";
+                group = "root";
+              };
               commonOpts = {
                 options = {
                   persistentStoragePath = mkOption {
@@ -55,7 +61,37 @@ in
                   };
                 };
               };
-              fileOpts = {
+              dirPermsOpts = { user, group, mode }: {
+                user = mkOption {
+                  type = str;
+                  default = user;
+                  description = ''
+                    If the directory doesn't exist in persistent
+                    storage it will be created and owned by the user
+                    specified by this option.
+                  '';
+                };
+                group = mkOption {
+                  type = str;
+                  default = group;
+                  description = ''
+                    If the directory doesn't exist in persistent
+                    storage it will be created and owned by the
+                    group specified by this option.
+                  '';
+                };
+                mode = mkOption {
+                  type = str;
+                  default = mode;
+                  example = "0700";
+                  description = ''
+                    If the directory doesn't exist in persistent
+                    storage it will be created with the mode
+                    specified by this option.
+                  '';
+                };
+              };
+              fileOpts = perms: {
                 options = {
                   file = mkOption {
                     type = str;
@@ -63,9 +99,10 @@ in
                       The path to the file.
                     '';
                   };
+                  parentDirectory = dirPermsOpts perms;
                 };
               };
-              dirOpts = {
+              dirOpts = perms: {
                 options = {
                   directory = mkOption {
                     type = str;
@@ -73,10 +110,16 @@ in
                       The path to the directory.
                     '';
                   };
-                };
+                } // (dirPermsOpts perms);
               };
-              file = submodule [ commonOpts fileOpts ];
-              dir = submodule [ commonOpts dirOpts ];
+              rootFile = submodule [
+                commonOpts
+                (fileOpts defaultPerms)
+              ];
+              rootDir = submodule [
+                commonOpts
+                (dirOpts defaultPerms)
+              ];
             in
             {
               options =
@@ -84,7 +127,23 @@ in
                   users = mkOption {
                     type = attrsOf (
                       submodule (
-                        { name, config, ... }: {
+                        { name, config, ... }:
+                        let
+                          userDefaultPerms = {
+                            inherit (defaultPerms) mode;
+                            user = name;
+                            group = users.${userDefaultPerms.user}.group;
+                          };
+                          userFile = submodule [
+                            commonOpts
+                            (fileOpts userDefaultPerms)
+                          ];
+                          userDir = submodule [
+                            commonOpts
+                            (dirOpts userDefaultPerms)
+                          ];
+                        in
+                        {
                           options =
                             {
                               # Needed because defining fileSystems
@@ -92,7 +151,7 @@ in
                               # results in infinite recursion.
                               home = mkOption {
                                 type = path;
-                                default = "/home/${name}";
+                                default = "/home/${userDefaultPerms.user}";
                                 defaultText = "/home/<username>";
                                 description = ''
                                   The user's home directory. Only
@@ -105,7 +164,7 @@ in
                                 '';
                               };
                               files = mkOption {
-                                type = listOf (either str file);
+                                type = listOf (either str userFile);
                                 default = [ ];
                                 example = [
                                   ".screenrc"
@@ -127,7 +186,7 @@ in
                               };
 
                               directories = mkOption {
-                                type = listOf (either str dir);
+                                type = listOf (either str userDir);
                                 default = [ ];
                                 example = [
                                   "Downloads"
@@ -159,7 +218,7 @@ in
                   };
 
                   files = mkOption {
-                    type = listOf (either str file);
+                    type = listOf (either str rootFile);
                     default = [ ];
                     example = [
                       "/etc/machine-id"
@@ -173,13 +232,14 @@ in
                         if isString file then
                           {
                             inherit file persistentStoragePath;
+                            parentDirectory = defaultPerms;
                           }
                         else
                           file);
                   };
 
                   directories = mkOption {
-                    type = listOf (either str dir);
+                    type = listOf (either str rootDir);
                     default = [ ];
                     example = [
                       "/var/log"
@@ -195,6 +255,7 @@ in
                         if isString directory then
                           {
                             inherit directory persistentStoragePath;
+                            inherit (defaultPerms) user group mode;
                           }
                         else
                           directory);
@@ -226,7 +287,7 @@ in
   config = {
     systemd.services =
       let
-        mkPersistFileService = { file, persistentStoragePath }:
+        mkPersistFileService = { file, persistentStoragePath, ... }:
           let
             targetFile = escapeShellArg (concatPaths [ persistentStoragePath file ]);
             mountPoint = escapeShellArg file;
@@ -263,7 +324,7 @@ in
     fileSystems =
       let
         # Create fileSystems bind mount entry.
-        mkBindMountNameValuePair = { directory, persistentStoragePath }: {
+        mkBindMountNameValuePair = { directory, persistentStoragePath, ... }: {
           name = concatPaths [ "/" directory ];
           value = {
             device = concatPaths [ persistentStoragePath directory ];
@@ -287,8 +348,8 @@ in
           patchShebangs $out
         '';
 
-        mkDirWithPerms = { directory, persistentStoragePath }: ''
-          ${createDirectories} ${escapeShellArgs [persistentStoragePath directory]}
+        mkDirWithPerms = { directory, persistentStoragePath, user, group, mode }: ''
+          ${createDirectories} ${escapeShellArgs [persistentStoragePath directory user group mode]}
         '';
 
         # Build an activation script which creates all persistent
@@ -301,17 +362,17 @@ in
                 {
                   directory = dirOf f.file;
                   inherit (f) persistentStoragePath;
-                })
+                } // f.parentDirectory)
               files);
           in
           {
-            "createPersistentStorageDirs" =
-              noDepEntry (concatMapStrings
-                mkDirWithPerms
-                (directories ++ fileDirectories));
+            "createPersistentStorageDirs" = {
+              deps = [ "users" "groups" ];
+              text = concatMapStrings mkDirWithPerms (directories ++ fileDirectories);
+            };
           };
 
-        persistFileScript = { file, persistentStoragePath }:
+        persistFileScript = { file, persistentStoragePath, ... }:
           let
             targetFile = escapeShellArg (concatPaths [ persistentStoragePath file ]);
             mountPoint = escapeShellArg file;
