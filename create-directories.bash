@@ -23,12 +23,15 @@ trap 'echo Error when executing ${BASH_COMMAND} at line ${LINENO}! >&2' ERR
 #   3. Copy the mode of the source path to the target path
 
 # Get inputs from command line arguments
-if [[ "$#" != 2 ]]; then
-    printf "Error: 'create-directories.bash' requires *two* args.\n" >&2
+if [[ "$#" != 5 ]]; then
+    printf "Error: 'create-directories.bash' requires *five* args.\n" >&2
     exit 1
 fi
 sourceBase="$1"
 target="$2"
+user="$3"
+group="$4"
+mode="$5"
 
 # trim trailing slashes the root of all evil
 sourceBase="${sourceBase%/}"
@@ -37,7 +40,7 @@ target="${target%/}"
 # check that the source exists and warn the user if it doesn't
 realSource="$(realpath -m "$sourceBase$target")"
 if [[ ! -d "$realSource" ]]; then
-    printf "Warning: Source directory '%s' does not exist; it will be created for you. Make sure the permissions are correct!\n" "$realSource"
+    printf "Warning: Source directory '%s' does not exist; it will be created for you with the following permissions: owner: '%s:%s', mode: '%s'.\n" "$realSource" "$user" "$group" "$mode"
 fi
 
 # iterate over each part of the target path, e.g. var, lib, iwd
@@ -50,7 +53,10 @@ for pathPart in $(echo "$target" | tr "/" " "); do
     currentSourcePath="$sourceBase$currentTargetPath"
 
     # create the source and target directories if they don't exist
-    [[ -d "$currentSourcePath" ]] || mkdir "$currentSourcePath"
+    if [[ ! -d "$currentSourcePath" ]]; then
+        mkdir --mode="$mode" "$currentSourcePath"
+        chown "$user:$group" "$currentSourcePath"
+    fi
     [[ -d "$currentTargetPath" ]] || mkdir "$currentTargetPath"
 
     # resolve the source path to avoid symlinks

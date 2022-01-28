@@ -40,10 +40,11 @@
             "/var/lib/bluetooth"
             "/var/lib/systemd/coredump"
             "/etc/NetworkManager/system-connections"
+            { directory = "/var/lib/colord"; user = "colord"; group = "colord"; mode = "u=rwx,g=rx,o="; }
           ];
           files = [
             "/etc/machine-id"
-            "/etc/nix/id_rsa"
+            { file = "/etc/nix/id_rsa"; parentDirectory = { mode = "u=rwx,g=,o="; }; }
           ];
           users.talyz = {
             directories = [
@@ -53,10 +54,10 @@
               "Documents"
               "Videos"
               "VirtualBox VMs"
-              ".gnupg"
-              ".ssh"
-              ".nixops"
-              ".local/share/keyrings"
+              { directory = ".gnupg"; mode = "0700"; }
+              { directory = ".ssh"; mode = "0700"; }
+              { directory = ".nixops"; mode = "0700"; }
+              { directory = ".local/share/keyrings"; mode = "0700"; }
               ".local/share/direnv"
             ];
             files = [
@@ -75,10 +76,63 @@
       attributes under ~environment.persistence~.
 
     - ~directories~ are all directories you want to bind mount to
-      persistent storage
+      persistent storage. A directory can be represented either as a
+      string, simply denoting its path, or as a submodule. The
+      submodule representation is useful when the default assumptions,
+      mainly regarding permissions, are incorrect. The available
+      options are:
+
+      - ~directory~, the path to the directory you want to bind mount
+        to persistent storage. Only setting this option is
+        equivalent to the string representation.
+
+      - ~persistentStoragePath~, the path to persistent
+        storage. Defaults to the ~environment.persistence~ submodule
+        name, i.e. ~"/persistent"~ in the example. This should most
+        likely be left to its default value - don't change it unless
+        you're certain you really need to.
+
+      - ~user~, the user who should own the directory. If the directory
+        doesn't already exist in persistent storage, it will be
+        created and this user will be its owner. This also applies to
+        any parent directories which don't yet exist. Changing this
+        once the directory has been created has no effect.
+
+      - ~group~, the group who should own the directory. If the
+        directory doesn't already exist in persistent storage, it will
+        be created and this group will be its owner. This also applies
+        to any parent directories which don't yet exist. Changing this
+        once the directory has been created has no effect.
+
+      - ~mode~, the permissions to set for the directory. If the
+        directory doesn't already exist in persistent storage, it will
+        be created with this mode. Can be either an octal mode
+        (e.g. ~0700~) or a symbolic mode (e.g. ~u=rwx,g=,o=~). This also
+        applies to any parent directories which don't yet exist.
+        Changing this once the directory has been created has no
+        effect.
 
     - ~files~ are all files you want to link or bind to persistent
-      storage
+      storage. A file can be represented either as a string, simply
+      denoting its path, or as a submodule. The submodule
+      representation is useful when the default assumptions, mainly
+      regarding the permissions of its parent directory, are
+      incorrect. The available options are:
+
+      - ~file~, the path to the file you want to bind mount to
+        persistent storage. Only setting this option is equivalent to
+        the string representation.
+
+      - ~persistentStoragePath~, the path to persistent
+        storage. Defaults to the ~environment.persistence~ submodule
+        name, i.e. ~"/persistent"~ in the example. This should most
+        likely be left to its default value - don't change it unless
+        you're certain you really need to.
+
+      - ~parentDirectory~, the permissions that should be applied to the
+        file's parent directory, if it doesn't already
+        exist. Available options are ~user~, ~group~ and ~mode~. See their
+        definition in ~directories~ above.
 
       If the file exists in persistent storage, it will be bind
       mounted to the target path; otherwise it will be symlinked.
