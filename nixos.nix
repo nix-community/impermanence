@@ -84,7 +84,7 @@ in
               description = "Bind mount or link ${targetFile} to ${mountPoint}";
               wantedBy = [ "local-fs.target" ];
               before = [ "local-fs.target" ];
-              path = [ pkgs.utillinux ];
+              path = [ pkgs.util-linux ];
               unitConfig.DefaultDependencies = false;
               serviceConfig = {
                 Type = "oneshot";
