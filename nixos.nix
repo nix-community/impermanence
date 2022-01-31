@@ -12,7 +12,8 @@ let
 
   cfg = config.environment.persistence;
   users = config.users.users;
-  allPersistentStoragePaths = zipAttrsWith (_name: flatten) (attrValues cfg);
+  allPersistentStoragePaths = { directories = [ ]; files = [ ]; users = [ ]; }
+    // (zipAttrsWith (_name: flatten) (attrValues cfg));
   inherit (allPersistentStoragePaths) files directories;
   mkMountScript = mountPoint: targetFile: ''
     if [[ -L ${mountPoint} && $(readlink -f ${mountPoint}) == ${targetFile} ]]; then
