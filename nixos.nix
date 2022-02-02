@@ -178,7 +178,9 @@ in
                                   map (file:
                                     if isString file then
                                       {
+                                        inherit persistentStoragePath;
                                         file = concatPaths [ config.home file ];
+                                        parentDirectory = userDefaultPerms;
                                       }
                                     else
                                       file // {
@@ -203,8 +205,9 @@ in
                                 apply =
                                   map (directory:
                                     if isString directory then
-                                      {
+                                      userDefaultPerms // {
                                         directory = concatPaths [ config.home directory ];
+                                        inherit persistentStoragePath;
                                       }
                                     else
                                       directory // {
@@ -254,9 +257,8 @@ in
                     apply =
                       map (directory:
                         if isString directory then
-                          {
+                          defaultPerms // {
                             inherit directory persistentStoragePath;
-                            inherit (defaultPerms) user group mode;
                           }
                         else
                           directory);
