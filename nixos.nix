@@ -5,7 +5,7 @@ let
     types foldl' unique noDepEntry concatMapStrings listToAttrs
     escapeShellArg escapeShellArgs replaceStrings recursiveUpdate all
     filter filterAttrs concatStringsSep concatMapStringsSep isString
-    catAttrs;
+    catAttrs optional;
 
   inherit (pkgs.callPackage ./lib.nix { }) splitPath dirListToPath
     concatPaths sanitizeName duplicates;
@@ -38,7 +38,7 @@ in
       default = { };
       type =
         let
-          inherit (types) attrsOf listOf submodule path either str;
+          inherit (types) attrsOf bool listOf submodule path either str;
         in
         attrsOf (
           submodule (
@@ -263,6 +263,15 @@ in
                         else
                           directory);
                   };
+
+                  hideMounts = mkOption {
+                    type = bool;
+                    default = false;
+                    example = true;
+                    description = ''
+                      Whether to hide bind mounts from showing up as mounted drives.
+                    '';
+                  };
                 };
               config =
                 let
@@ -332,7 +341,8 @@ in
           value = {
             device = concatPaths [ persistentStoragePath directory ];
             noCheck = true;
-            options = [ "bind" ];
+            options = [ "bind" ]
+              ++ optional cfg.${persistentStoragePath}.hideMounts "x-gvfs-hide";
           };
         };
 
