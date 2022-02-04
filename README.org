@@ -35,6 +35,7 @@
     #+begin_src nix
       {
         environment.persistence."/persistent" = {
+          hideMounts = true;
           directories = [
             "/var/log"
             "/var/lib/bluetooth"
@@ -136,6 +137,11 @@
 
       If the file exists in persistent storage, it will be bind
       mounted to the target path; otherwise it will be symlinked.
+
+    - ~hideMounts~ allows you to specify whether to hide the
+      bind mounts from showing up as mounted drives in the file
+      manager. If enabled, it sets the mount option ~x-gvfs-hide~
+      on all the bind mounts.
 
     - ~users.talyz~ handles files and directories in ~talyz~'s home
       directory
