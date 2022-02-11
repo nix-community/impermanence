@@ -93,6 +93,14 @@ in
             };
         })
       );
+      description = ''
+        Persistent storage locations and the files and directories to
+        link to them. Each attribute name should be the path relative
+        to the user's home directory.
+
+        For detailed usage, check the <link
+        xlink:href="https://github.com/nix-community/impermanence">documentation</link>.
+      '';
     };
 
   };

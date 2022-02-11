@@ -219,6 +219,22 @@ in
                       )
                     );
                     default = { };
+                    description = ''
+                      An alternative to the home-manager module on NixOS.
+                    '';
+                    example = ''
+                      {
+                        talyz = {
+                          files = [
+                            ".screenrc"
+                          ];
+                          directories = [
+                            "Downloads"
+                          ];
+                        };
+                      }
+                    '';
+
                   };
 
                   files = mkOption {
