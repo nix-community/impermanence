@@ -19,6 +19,21 @@ let
     cp ${./mount-file.bash} $out
     patchShebangs $out
   '';
+
+  # Create fileSystems bind mount entry.
+  mkBindMountNameValuePair = { directory, persistentStoragePath, ... }: {
+    name = concatPaths [ "/" directory ];
+    value = {
+      device = concatPaths [ persistentStoragePath directory ];
+      noCheck = true;
+      options = [ "bind" ]
+        ++ optional cfg.${persistentStoragePath}.hideMounts "x-gvfs-hide";
+    };
+  };
+
+  # Create all fileSystems bind mount entries for a specific
+  # persistent storage path.
+  bindMounts = listToAttrs (map mkBindMountNameValuePair directories);
 in
 {
   options = {
@@ -348,6 +363,9 @@ in
       '';
     };
 
+    # Forward declare a dummy option for VM filesystems since the real one won't exist
+    # unless the VM module is actually imported.
+    virtualisation.fileSystems = mkOption { };
   };
 
   config = {
@@ -385,23 +403,9 @@ in
       in
       foldl' recursiveUpdate { } (map mkPersistFileService files);
 
-    fileSystems =
-      let
-        # Create fileSystems bind mount entry.
-        mkBindMountNameValuePair = { directory, persistentStoragePath, ... }: {
-          name = concatPaths [ "/" directory ];
-          value = {
-            device = concatPaths [ persistentStoragePath directory ];
-            noCheck = true;
-            options = [ "bind" ]
-              ++ optional cfg.${persistentStoragePath}.hideMounts "x-gvfs-hide";
-          };
-        };
-
-        # Create all fileSystems bind mount entries for a specific
-        # persistent storage path.
-      in
-      listToAttrs (map mkBindMountNameValuePair directories);
+    fileSystems = bindMounts;
+    # So the mounts still make it into a VM built from `system.build.vm`
+    virtualisation.fileSystems = bindMounts;
 
     system.activationScripts =
       let
