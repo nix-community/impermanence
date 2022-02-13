@@ -93,6 +93,40 @@ in
             };
         })
       );
+      description = ''
+        A set of persistent storage location submodules listing the
+        files and directories to link to their respective persistent
+        storage location.
+
+        Each attribute name should be the path relative to the user's
+        home directory.
+
+        For detailed usage, check the <link
+        xlink:href="https://github.com/nix-community/impermanence">documentation</link>.
+      '';
+      example = literalExpression ''
+        {
+          "/persistent/home/talyz" = {
+            directories = [
+              "Downloads"
+              "Music"
+              "Pictures"
+              "Documents"
+              "Videos"
+              "VirtualBox VMs"
+              ".gnupg"
+              ".ssh"
+              ".nixops"
+              ".local/share/keyrings"
+              ".local/share/direnv"
+            ];
+            files = [
+              ".screenrc"
+            ];
+            allowOther = true;
+          };
+        }
+      '';
     };
 
   };
