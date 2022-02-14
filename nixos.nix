@@ -5,7 +5,7 @@ let
     types foldl' unique noDepEntry concatMapStrings listToAttrs
     escapeShellArg escapeShellArgs replaceStrings recursiveUpdate all
     filter filterAttrs concatStringsSep concatMapStringsSep isString
-    catAttrs optional literalExpression;
+    catAttrs optional optionalString literalExpression;
 
   inherit (pkgs.callPackage ./lib.nix { }) splitPath dirListToPath
     concatPaths sanitizeName duplicates;
@@ -15,14 +15,14 @@ let
   allPersistentStoragePaths = { directories = [ ]; files = [ ]; users = [ ]; }
     // (zipAttrsWith (_name: flatten) (attrValues cfg));
   inherit (allPersistentStoragePaths) files directories;
-  mkMountScript = mountPoint: targetFile: ''
+  mkMountScript = { isService ? false, mountPoint, targetFile }: ''
     if [[ -L ${mountPoint} && $(readlink -f ${mountPoint}) == ${targetFile} ]]; then
         echo "${mountPoint} already links to ${targetFile}, ignoring"
     elif mount | grep -F ${mountPoint}' ' >/dev/null && ! mount | grep -F ${mountPoint}/ >/dev/null; then
         echo "mount already exists at ${mountPoint}, ignoring"
     elif [[ -e ${mountPoint} ]]; then
         echo "A file already exists at ${mountPoint}!" >&2
-        exit 1
+        ${optionalString isService "exit 1"}
     elif [[ -e ${targetFile} ]]; then
         touch ${mountPoint}
         mount -o bind ${targetFile} ${mountPoint}
@@ -370,7 +370,7 @@ in
                 RemainAfterExit = true;
                 ExecStart = pkgs.writeShellScript "bindOrLink-${sanitizeName targetFile}" ''
                   set -eu
-                  ${mkMountScript mountPoint targetFile}
+                  ${mkMountScript { isService = true; inherit mountPoint targetFile; }}
                 '';
                 ExecStop = pkgs.writeShellScript "unbindOrUnlink-${sanitizeName targetFile}" ''
                   set -eu
@@ -447,7 +447,7 @@ in
           {
             "persist-${sanitizeName targetFile}" = {
               deps = [ "createPersistentStorageDirs" ];
-              text = mkMountScript mountPoint targetFile;
+              text = mkMountScript { inherit mountPoint targetFile; };
             };
           };
 
