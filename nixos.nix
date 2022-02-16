@@ -305,6 +305,17 @@ in
                       Whether to hide bind mounts from showing up as mounted drives.
                     '';
                   };
+
+                  enableDebugging = mkOption {
+                    type = bool;
+                    default = false;
+                    internal = true;
+                    description = ''
+                      Enable debug trace output when running
+                      scripts. You only need to enable this if asked
+                      to.
+                    '';
+                  };
                 };
               config =
                 let
@@ -415,9 +426,20 @@ in
           patchShebangs $out
         '';
 
-        mkDirWithPerms = { directory, persistentStoragePath, user, group, mode }: ''
-          ${createDirectories} ${escapeShellArgs [persistentStoragePath directory user group mode]}
-        '';
+        mkDirWithPerms = { directory, persistentStoragePath, user, group, mode }:
+          let
+            args = [
+              persistentStoragePath
+              directory
+              user
+              group
+              mode
+              cfg.${persistentStoragePath}.enableDebugging
+            ];
+          in
+          ''
+            ${createDirectories} ${escapeShellArgs args}
+          '';
 
         # Build an activation script which creates all persistent
         # storage directories we want to bind mount.

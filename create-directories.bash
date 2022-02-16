@@ -28,8 +28,8 @@ trap 'echo Error when executing ${BASH_COMMAND} at line ${LINENO}! >&2' ERR
 #   3. Copy the mode of the source path to the target path
 
 # Get inputs from command line arguments
-if [[ "$#" != 5 ]]; then
-    printf "Error: 'create-directories.bash' requires *five* args.\n" >&2
+if [[ "$#" != 6 ]]; then
+    printf "Error: 'create-directories.bash' requires *six* args.\n" >&2
     exit 1
 fi
 sourceBase="$1"
@@ -37,6 +37,11 @@ target="$2"
 user="$3"
 group="$4"
 mode="$5"
+debug="$6"
+
+if (( "$debug" )); then
+    set -o xtrace
+fi
 
 # trim trailing slashes the root of all evil
 sourceBase="${sourceBase%/}"
@@ -58,7 +63,7 @@ for pathPart in $target; do
 
     # skip empty parts caused by the prefix slash and multiple
     # consecutive slashes
-    [[ $pathPart == "" ]] && continue
+    [[ "$pathPart" == "" ]] && continue
 
     # construct the incremental path, e.g. /var, /var/lib, /var/lib/iwd
     currentTargetPath="$previousPath$pathPart/"
