@@ -15,20 +15,9 @@ let
   allPersistentStoragePaths = { directories = [ ]; files = [ ]; users = [ ]; }
     // (zipAttrsWith (_name: flatten) (attrValues cfg));
   inherit (allPersistentStoragePaths) files directories;
-  mkMountScript = mountPoint: targetFile: ''
-    if [[ -L ${mountPoint} && $(readlink -f ${mountPoint}) == ${targetFile} ]]; then
-        echo "${mountPoint} already links to ${targetFile}, ignoring"
-    elif mount | grep -F ${mountPoint}' ' >/dev/null && ! mount | grep -F ${mountPoint}/ >/dev/null; then
-        echo "mount already exists at ${mountPoint}, ignoring"
-    elif [[ -e ${mountPoint} ]]; then
-        echo "A file already exists at ${mountPoint}!" >&2
-        exit 1
-    elif [[ -e ${targetFile} ]]; then
-        touch ${mountPoint}
-        mount -o bind ${targetFile} ${mountPoint}
-    else
-        ln -s ${targetFile} ${mountPoint}
-    fi
+  mountFile = pkgs.runCommand "impermanence-mount-file" { } ''
+    cp ${./mount-file.bash} $out
+    patchShebangs $out
   '';
 in
 {
@@ -305,6 +294,17 @@ in
                       Whether to hide bind mounts from showing up as mounted drives.
                     '';
                   };
+
+                  enableDebugging = mkOption {
+                    type = bool;
+                    default = false;
+                    internal = true;
+                    description = ''
+                      Enable debug trace output when running
+                      scripts. You only need to enable this if asked
+                      to.
+                    '';
+                  };
                 };
               config =
                 let
@@ -357,6 +357,7 @@ in
           let
             targetFile = escapeShellArg (concatPaths [ persistentStoragePath file ]);
             mountPoint = escapeShellArg file;
+            enableDebugging = escapeShellArg cfg.${persistentStoragePath}.enableDebugging;
           in
           {
             "persist-${sanitizeName targetFile}" = {
@@ -368,10 +369,7 @@ in
               serviceConfig = {
                 Type = "oneshot";
                 RemainAfterExit = true;
-                ExecStart = pkgs.writeShellScript "bindOrLink-${sanitizeName targetFile}" ''
-                  set -eu
-                  ${mkMountScript mountPoint targetFile}
-                '';
+                ExecStart = "${mountFile} ${mountPoint} ${targetFile} ${enableDebugging}";
                 ExecStop = pkgs.writeShellScript "unbindOrUnlink-${sanitizeName targetFile}" ''
                   set -eu
                   if [[ -L ${mountPoint} ]]; then
@@ -415,13 +413,24 @@ in
           patchShebangs $out
         '';
 
-        mkDirWithPerms = { directory, persistentStoragePath, user, group, mode }: ''
-          ${createDirectories} ${escapeShellArgs [persistentStoragePath directory user group mode]}
-        '';
+        mkDirWithPerms = { directory, persistentStoragePath, user, group, mode }:
+          let
+            args = [
+              persistentStoragePath
+              directory
+              user
+              group
+              mode
+              cfg.${persistentStoragePath}.enableDebugging
+            ];
+          in
+          ''
+            ${createDirectories} ${escapeShellArgs args}
+          '';
 
         # Build an activation script which creates all persistent
         # storage directories we want to bind mount.
-        dirCreationScripts =
+        dirCreationScript =
           let
             inherit directories;
             fileDirectories = unique (map
@@ -432,29 +441,45 @@ in
                 } // f.parentDirectory)
               files);
           in
-          {
-            "createPersistentStorageDirs" = {
-              deps = [ "users" "groups" ];
-              text = concatMapStrings mkDirWithPerms (directories ++ fileDirectories);
-            };
-          };
+          pkgs.writeShellScript "impermanence-run-create-directories" ''
+            _status=0
+            trap "_status=1" ERR
+            ${concatMapStrings mkDirWithPerms (directories ++ fileDirectories)}
+            exit $_status
+          '';
 
-        persistFileScript = { file, persistentStoragePath, ... }:
+        mkPersistFile = { file, persistentStoragePath, ... }:
           let
-            targetFile = escapeShellArg (concatPaths [ persistentStoragePath file ]);
-            mountPoint = escapeShellArg file;
+            mountPoint = file;
+            targetFile = concatPaths [ persistentStoragePath file ];
+            args = escapeShellArgs [
+              mountPoint
+              targetFile
+              cfg.${persistentStoragePath}.enableDebugging
+            ];
           in
-          {
-            "persist-${sanitizeName targetFile}" = {
-              deps = [ "createPersistentStorageDirs" ];
-              text = mkMountScript mountPoint targetFile;
-            };
-          };
+          ''
+            ${mountFile} ${args}
+          '';
 
-        persistFileScripts =
-          foldl' recursiveUpdate { } (map persistFileScript files);
+        persistFileScript =
+          pkgs.writeShellScript "impermanence-persist-files" ''
+            _status=0
+            trap "_status=1" ERR
+            ${concatMapStrings mkPersistFile files}
+            exit $_status
+          '';
       in
-      dirCreationScripts // persistFileScripts;
+      {
+        "createPersistentStorageDirs" = {
+          deps = [ "users" "groups" ];
+          text = "${dirCreationScript}";
+        };
+        "persist-files" = {
+          deps = [ "createPersistentStorageDirs" ];
+          text = "${persistFileScript}";
+        };
+      };
 
     assertions =
       let
