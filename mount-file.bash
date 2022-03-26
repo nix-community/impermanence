@@ -10,14 +10,15 @@ shopt -s inherit_errexit  # Inherit the errexit option status in subshells.
 trap 'echo Error when executing ${BASH_COMMAND} at line ${LINENO}! >&2' ERR
 
 # Get inputs from command line arguments
-if [[ "$#" != 3 ]]; then
-    echo "Error: 'mount-file.bash' requires *three* args." >&2
+if [[ "$#" != 4 ]]; then
+    echo "Error: 'mount-file.bash' requires *four* args." >&2
     exit 1
 fi
 
 mountPoint="$1"
 targetFile="$2"
 debug="$3"
+force="$4"
 
 if (( "$debug" )); then
     set -o xtrace
@@ -27,12 +28,21 @@ if [[ -L "$mountPoint" && $(readlink -f "$mountPoint") == "$targetFile" ]]; then
     echo "$mountPoint already links to $targetFile, ignoring"
 elif mount | grep -F "$mountPoint"' ' >/dev/null && ! mount | grep -F "$mountPoint"/ >/dev/null; then
     echo "mount already exists at $mountPoint, ignoring"
-elif [[ -e "$mountPoint" ]]; then
+elif [[ -z "$force" ]] && [[ -e "$mountPoint" ]]; then
     echo "A file already exists at $mountPoint!" >&2
     exit 1
 elif [[ -e "$targetFile" ]]; then
-    touch "$mountPoint"
+    if [[ -f "$mountPoint" ]]; then
+        truncate -s 0 "$mountPoint"
+    else
+        rm -f "$mountPoint"
+        touch "$mountPoint"
+    fi
     mount -o bind "$targetFile" "$mountPoint"
 else
-    ln -s "$targetFile" "$mountPoint"
+    if [[ -n "$force" ]]; then
+        ln -sf "$targetFile" "$mountPoint"
+    else
+        ln -s "$targetFile" "$mountPoint"
+    fi
 fi
