@@ -199,6 +199,10 @@
             ".nixops"
             ".local/share/keyrings"
             ".local/share/direnv"
+            {
+              directory = ".local/share/Steam";
+              method = "symlink";
+            }
           ];
           files = [
             ".screenrc"
@@ -210,7 +214,10 @@
 
     - ~"/persistent/home/talyz"~ is the path to your persistent storage location
     - ~directories~ are all directories you want to link to persistent storage
-    - ~files~ are all files you want to link to persistent storage
+        - It is possible to switch the linking ~method~ between bindfs (the
+          default) and symbolic links.
+    - ~files~ are all files you want to link to persistent storage. These are
+      symbolic links to their target location.
     - ~allowOther~ allows other users, such as ~root~, to access files
       through the bind mounted directories listed in
       ~directories~. Useful for ~sudo~ operations, Docker, etc. Requires
@@ -240,9 +247,9 @@
     removes the first part of the path when deciding where to put the
     links.
 
-    /Note:/ Since this module uses the ~bindfs~ fuse filesystem for
-    directories, the names of the directories you add will be visible
-    in the ~/etc/mtab~ file and in the output of ~mount~ to all users.
+    /Note:/ When using ~bindfs~ fuse filesystem for directories, the names of
+    the directories you add will be visible in the ~/etc/mtab~ file and in the
+    output of ~mount~ to all users.
 
 ** Further reading
    The following blog posts provide more information on the concept of ephemeral
