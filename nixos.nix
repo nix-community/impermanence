@@ -15,7 +15,7 @@ let
   allPersistentStoragePaths = { directories = [ ]; files = [ ]; users = [ ]; }
     // (zipAttrsWith (_name: flatten) (attrValues cfg));
   inherit (allPersistentStoragePaths) files directories;
-  mountFile = pkgs.runCommand "impermanence-mount-file" { } ''
+  mountFile = pkgs.runCommand "impermanence-mount-file" { buildInputs = [ pkgs.bash ]; } ''
     cp ${./mount-file.bash} $out
     patchShebangs $out
   '';
@@ -412,7 +412,7 @@ in
         # Script to create directories in persistent and ephemeral
         # storage. The directory structure's mode and ownership mirror
         # those of persistentStoragePath/dir.
-        createDirectories = pkgs.runCommand "impermanence-create-directories" { } ''
+        createDirectories = pkgs.runCommand "impermanence-create-directories" { buildInputs = [ pkgs.bash ]; } ''
           cp ${./create-directories.bash} $out
           patchShebangs $out
         '';
