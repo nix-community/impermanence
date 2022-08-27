@@ -6,7 +6,32 @@ let
 
   persistentStoragePaths = attrNames cfg;
 
+  getDirPath = v: if isString v then v else v.directory;
+  getDirMethod = v: v.method or "bindfs";
+  isBindfs = v: (getDirMethod v) == "bindfs";
+  isSymlink = v: (getDirMethod v) == "symlink";
+
   inherit (pkgs.callPackage ./lib.nix { }) splitPath dirListToPath concatPaths sanitizeName;
+
+  mount = "${pkgs.util-linux}/bin/mount";
+  unmountScript = mountPoint: tries: sleep: ''
+    triesLeft=${toString tries}
+    if ${mount} | grep -F ${mountPoint}' ' >/dev/null; then
+        while (( triesLeft > 0 )); do
+            if fusermount -u ${mountPoint}; then
+                break
+            else
+                (( triesLeft-- ))
+                if (( triesLeft == 0 )); then
+                    echo "Couldn't perform regular unmount of ${mountPoint}. Attempting lazy unmount."
+                    fusermount -uz ${mountPoint}
+                else
+                    sleep ${toString sleep}
+                fi
+            fi
+        done
+    fi
+  '';
 in
 {
   options = {
@@ -18,7 +43,25 @@ in
           options =
             {
               directories = mkOption {
-                type = with types; listOf str;
+                type = with types; listOf (either str (submodule {
+                  options = {
+                    directory = mkOption {
+                      type = str;
+                      default = null;
+                      description = "The directory path to be linked.";
+                    };
+                    method = mkOption {
+                      type = types.enum [ "bindfs" "symlink" ];
+                      default = "bindfs";
+                      description = ''
+                        The linking method that should be used for this
+                        directory. bindfs is the default and works for most use
+                        cases, however some programs may behave better with
+                        symlinks.
+                      '';
+                    };
+                  };
+                }));
                 default = [ ];
                 example = [
                   "Downloads"
@@ -31,10 +74,15 @@ in
                   ".ssh"
                   ".local/share/keyrings"
                   ".local/share/direnv"
+                  {
+                    directory = ".local/share/Steam";
+                    method = "symlink";
+                  }
                 ];
                 description = ''
                   A list of directories in your home directory that
-                  you want to link to persistent storage.
+                  you want to link to persistent storage. You may optionally
+                  specify the linking method each directory should use.
                 '';
               };
 
@@ -119,6 +167,10 @@ in
               ".nixops"
               ".local/share/keyrings"
               ".local/share/direnv"
+              {
+                directory = ".local/share/Steam";
+                method = "symlink";
+              }
             ];
             files = [
               ".screenrc"
@@ -140,19 +192,20 @@ in
             { }
             "ln -s '${file}' $out";
 
-        mkLinkNameValuePair = persistentStoragePath: file: {
+        mkLinkNameValuePair = persistentStoragePath: fileOrDir: {
           name =
             if cfg.${persistentStoragePath}.removePrefixDirectory then
-              dirListToPath (tail (splitPath [ file ]))
+              dirListToPath (tail (splitPath [ fileOrDir ]))
             else
-              file;
-          value = { source = link (concatPaths [ persistentStoragePath file ]); };
+              fileOrDir;
+          value = { source = link (concatPaths [ persistentStoragePath fileOrDir ]); };
         };
 
         mkLinksToPersistentStorage = persistentStoragePath:
           listToAttrs (map
             (mkLinkNameValuePair persistentStoragePath)
-            (cfg.${persistentStoragePath}.files)
+            (map getDirPath (cfg.${persistentStoragePath}.files ++
+              (filter isSymlink cfg.${persistentStoragePath}.directories)))
           );
       in
       foldl' recursiveUpdate { } (map mkLinksToPersistentStorage persistentStoragePaths);
@@ -187,20 +240,7 @@ in
             '';
             stopScript = pkgs.writeShellScript "unmount-${name}" ''
               set -eu
-              triesLeft=6
-              while (( triesLeft > 0 )); do
-                  if fusermount -u ${mountPoint}; then
-                      exit 0
-                  else
-                      (( triesLeft-- ))
-                      if (( triesLeft == 0 )); then
-                          echo "Couldn't perform regular unmount of ${mountPoint}. Attempting lazy unmount."
-                          fusermount -uz ${mountPoint}
-                      else
-                          sleep 5
-                      fi
-                  fi
-              done
+              ${unmountScript mountPoint 6 5}
             '';
           in
           {
@@ -240,7 +280,7 @@ in
         mkBindMountServicesForPath = persistentStoragePath:
           listToAttrs (map
             (mkBindMountService persistentStoragePath)
-            cfg.${persistentStoragePath}.directories
+            (map getDirPath (filter isBindfs cfg.${persistentStoragePath}.directories))
           );
       in
       builtins.foldl'
@@ -251,6 +291,7 @@ in
     home.activation =
       let
         dag = config.lib.dag;
+        mount = "${pkgs.util-linux}/bin/mount";
 
         # The name of the activation script entry responsible for
         # reloading systemd user services. The name was initially
@@ -270,7 +311,6 @@ in
                 dir;
             targetDir = escapeShellArg (concatPaths [ persistentStoragePath dir ]);
             mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
-            mount = "${pkgs.util-linux}/bin/mount";
             bindfsOptions = concatStringsSep "," (
               optional (!cfg.${persistentStoragePath}.allowOther) "no-allow-other"
               ++ optional (versionAtLeast pkgs.bindfs.version "1.14.9") "fsname=${targetDir}"
@@ -304,7 +344,7 @@ in
         mkBindMountsForPath = persistentStoragePath:
           concatMapStrings
             (mkBindMount persistentStoragePath)
-            cfg.${persistentStoragePath}.directories;
+            (map getDirPath (filter isBindfs cfg.${persistentStoragePath}.directories));
 
         mkUnmount = persistentStoragePath: dir:
           let
@@ -317,31 +357,52 @@ in
           in
           ''
             if [[ -n ''${mountedPaths[${mountPoint}]+x} ]]; then
-                triesLeft=3
-                while (( triesLeft > 0 )); do
-                    if fusermount -u ${mountPoint}; then
-                        break
-                    else
-                        (( triesLeft-- ))
-                        if (( triesLeft == 0 )); then
-                            echo "Couldn't perform regular unmount of ${mountPoint}. Attempting lazy unmount."
-                            fusermount -uz ${mountPoint} || true
-                        else
-                            sleep 1
-                        fi
-                    fi
-                done
+              ${unmountScript mountPoint 3 1}
             fi
           '';
 
         mkUnmountsForPath = persistentStoragePath:
           concatMapStrings
             (mkUnmount persistentStoragePath)
-            cfg.${persistentStoragePath}.directories;
+            (map getDirPath (filter isBindfs cfg.${persistentStoragePath}.directories));
+
+        mkLinkCleanup = persistentStoragePath: dir:
+          let
+            mountDir =
+              if cfg.${persistentStoragePath}.removePrefixDirectory then
+                dirListToPath (tail (splitPath [ dir ]))
+              else
+                dir;
+            mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
+          in
+          ''
+            # Unmount if it's mounted. Ensures smooth transition: bindfs -> symlink
+            ${unmountScript mountPoint 3 1}
+
+            # If it is a directory and it's empty
+            if [ -d ${mountPoint} ] && [ -z "$(ls -A ${mountPoint})" ]; then
+              echo "Removing empty directory ${mountPoint}"
+              rm -d ${mountPoint}
+            fi
+          '';
+
+        mkLinkCleanupForPath = persistentStoragePath:
+          concatMapStrings
+            (mkLinkCleanup persistentStoragePath)
+            (map getDirPath (filter isSymlink cfg.${persistentStoragePath}.directories));
+
 
       in
       mkMerge [
         (mkIf (any (path: cfg.${path}.directories != [ ]) persistentStoragePaths) {
+          # Clean up existing empty directories in the way of links
+          cleanEmptyLinkTargets =
+            dag.entryBefore
+              [ "checkLinkTargets" ]
+              ''
+                ${concatMapStrings mkLinkCleanupForPath persistentStoragePaths}
+              '';
+
           createAndMountPersistentStoragePaths =
             dag.entryBefore
               [ "writeBoundary" ]
@@ -370,7 +431,7 @@ in
                 unmountBindMounts
               '';
         })
-        (mkIf (any (path: cfg.${path}.files != [ ]) persistentStoragePaths) {
+        (mkIf (any (path: (cfg.${path}.files != [ ]) || ((filter isSymlink cfg.${path}.directories) != [ ])) persistentStoragePaths) {
           createTargetFileDirectories =
             dag.entryBefore
               [ "writeBoundary" ]
@@ -380,7 +441,7 @@ in
                     (targetFilePath: ''
                       mkdir -p ${escapeShellArg (concatPaths [ persistentStoragePath (dirOf targetFilePath) ])}
                     '')
-                    cfg.${persistentStoragePath}.files)
+                    (map getDirPath (cfg.${persistentStoragePath}.files ++ (filter isSymlink cfg.${persistentStoragePath}.directories))))
                 persistentStoragePaths);
         })
       ];
