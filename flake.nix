@@ -28,21 +28,30 @@
       nixosModule = self.nixosModules.impermanence;
 
       checks = eachSystem
-        (system: {
-          formatter = nixpkgs.legacyPackages.${system}.callPackage
-            ({ lib, runCommand, self }: runCommand "impermanence-flake-formatter-check"
+        (system:
+          let
+            importCheck = test:
+              import test {
+                inherit nixpkgs system;
+                modules = [ self.nixosModule ];
+              };
+          in
+          {
+            formatter = nixpkgs.legacyPackages.${system}.callPackage
+              ({ lib, runCommand, self }: runCommand "impermanence-flake-formatter-check"
+                {
+                  inherit self;
+                  check = lib.getExe (self.formatter.${system}.override { checkMode = true; });
+                } ''
+                cd "$self" || exit
+                "$check" || exit
+                echo OK > "$out"
+              '')
               {
                 inherit self;
-                check = lib.getExe (self.formatter.${system}.override { checkMode = true; });
-              } ''
-              cd "$self" || exit
-              "$check" || exit
-              echo OK > "$out"
-            '')
-            {
-              inherit self;
-            };
-        });
+              };
+            modules = importCheck ./tests/modules.nix;
+          });
 
       formatter = eachSystem (system:
         let
