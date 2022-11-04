@@ -65,6 +65,11 @@ let
         "/def".users.auser.files = [ "/same/file" ];
       };
     };
+
+    testMissingNeededForBoot = checkAssertionsMatch "All filesystems used for persistent storage must[^a-z]*have the flag neededForBoot" {
+      fileSystems."/abc" = { fsType = "tmpfs"; neededForBoot = false; };
+      environment.persistence."/abc".directories = [ "/hello" ];
+    };
   };
 in
 # Abort if `tests`(list containing failed tests) is not empty
