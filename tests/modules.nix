@@ -70,6 +70,13 @@ let
       fileSystems."/abc" = { fsType = "tmpfs"; neededForBoot = false; };
       environment.persistence."/abc".directories = [ "/hello" ];
     };
+
+    testHomeMismatch = checkAssertionsMatch "Users and home doesn't match" {
+      users.users.auser = { isNormalUser = true; home = "/althome/auser"; };
+      environment.persistence = {
+        "/abc".users.auser.files = [ "/a/file" ];
+      };
+    };
   };
 in
 # Abort if `tests`(list containing failed tests) is not empty
