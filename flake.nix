@@ -51,6 +51,7 @@
                 inherit self;
               };
             modules = importCheck ./tests/modules.nix;
+            nixos = importCheck ./tests/nixos.nix;
           });
 
       formatter = eachSystem (system:
