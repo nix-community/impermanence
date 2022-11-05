@@ -263,7 +263,6 @@ in
                     default = [ ];
                     example = [
                       "/etc/machine-id"
-                      "/etc/nix/id_rsa"
                     ];
                     description = ''
                       Files that should be stored in persistent storage.
@@ -355,7 +354,6 @@ in
             ];
             files = [
               "/etc/machine-id"
-              { file = "/etc/nix/id_rsa"; parentDirectory = { mode = "u=rwx,g=,o="; }; }
             ];
           };
           users.talyz = { ... }; # See the dedicated example
