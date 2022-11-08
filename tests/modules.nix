@@ -5,6 +5,8 @@ let
 
   inherit (nixpkgs.lib) any escapeShellArg nixosSystem runTests;
 
+  inherit (pkgs.callPackage ../lib.nix { }) cleanPath;
+
   mkSystem = config: nixosSystem {
     inherit system;
     modules = modules ++ [
@@ -29,6 +31,17 @@ let
     expected = true;
     expr = assertionsMatch pattern (mkSystem config).config.assertions;
   };
+
+  checkEval = expected: thing:
+    let
+      result = builtins.tryEval thing;
+    in
+    {
+      inherit expected;
+      expr = result.success;
+    };
+
+  checkEvalError = checkEval false;
 
   duplicateDirPattern = "The following directories were specified two or more[^a-z]*times";
   duplicateFilePattern = "The following files were specified two or more[^a-z]*times";
@@ -76,6 +89,13 @@ let
       environment.persistence = {
         "/abc".users.auser.files = [ "/a/file" ];
       };
+    };
+
+    testNoPathTraversalAllowed = checkEvalError (cleanPath "../foo/bar");
+
+    testCleanPath = {
+      expected = "bar";
+      expr = cleanPath "foo/../bar";
     };
   };
 in
