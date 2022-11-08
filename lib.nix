@@ -2,10 +2,8 @@
 let
   inherit (lib)
     filter
-    concatMap
     concatStringsSep
     hasPrefix
-    head
     replaceStrings
     optionalString
     removePrefix
@@ -21,10 +19,7 @@ let
 
   # ["/home/user/" "/.screenrc"] -> ["home" "user" ".screenrc"]
   splitPath = paths:
-    (filter
-      (s: builtins.typeOf s == "string" && s != "" && s != ".")
-      (concatMap (builtins.split "/") paths)
-    );
+    filter builtins.isString (builtins.split "/" (concatPaths paths));
 
   # Remove duplicate "/" elements, "/./", "foo/..", etc., from a path
   cleanPath = path:
@@ -43,15 +38,11 @@ let
       throw "illegal path traversal in `${path}`";
 
   # ["home" "user" ".screenrc"] -> "home/user/.screenrc"
-  dirListToPath = dirList: (concatStringsSep "/" dirList);
-
   # ["/home/user/" "/.screenrc"] -> "/home/user/.screenrc"
-  concatPaths = paths:
-    let
-      prefix = optionalString (hasPrefix "/" (head paths)) "/";
-      path = dirListToPath (splitPath paths);
-    in
-    prefix + path;
+  dirListToPath = dirList: cleanPath (concatStringsSep "/" dirList);
+
+  # Alias of dirListToPath
+  concatPaths = dirListToPath;
 
 
   parentsOf = path:

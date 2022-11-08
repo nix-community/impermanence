@@ -5,7 +5,8 @@ let
 
   inherit (nixpkgs.lib) any escapeShellArg nixosSystem runTests;
 
-  inherit (pkgs.callPackage ../lib.nix { }) cleanPath splitPath;
+  inherit (pkgs.callPackage ../lib.nix { }) cleanPath splitPath dirListToPath
+    concatPaths;
 
   mkSystem = config: nixosSystem {
     inherit system;
@@ -101,6 +102,33 @@ let
     testSplitPath = {
       expected = [ "foo" "bar" "bazz" ];
       expr = splitPath [ "././foo/." "/bar/bazz/./" ];
+    };
+
+    testDirListToPath = {
+      expected = [
+        "foo/bar"
+        "home/user/.screenrc"
+        "/home/user/.screenrc"
+      ];
+
+      expr = map dirListToPath [
+        [ "foo/./" "./bar/bazz/.." "/quux" ".." ]
+        [ "home" "user" ".screenrc" ]
+        [ "/home/user" "/.screenrc" ]
+      ];
+    };
+
+    testConcatPaths = {
+      expected = [
+        "foo/bar"
+        "home/user/.screenrc"
+        "/home/user/.screenrc"
+      ];
+      expr = map concatPaths [
+        [ "foo/./" "./bar/bazz/.." "/quux" ".." ]
+        [ "home" "user" ".screenrc" ]
+        [ "/home/user" "/.screenrc" ]
+      ];
     };
   };
 in

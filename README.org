@@ -327,8 +327,43 @@
       set to this path - it can't currently be automatically deduced
       due to a limitation in ~nixpkgs~.
 
+**** Warnings, caveats and restrictions
+
+***** Mark your persistent volues with ~neededForBoot~
+
     /Important note:/ Make sure your persistent volumes are marked with
     ~neededForBoot~, otherwise you will run into problems.
+
+***** Path traversal is prohibited
+
+    Impermanence will abort if any path specification in its configuration
+    contains ~..~ elements that cannot be resolved without "escaping" the
+    persistent storage path.  An example of such a configuration is:
+
+    #+begin_src nix
+      {
+        environment.persistence = {
+          "/abc".files = [ "../foo/bar" ];
+        };
+      }
+    #+end_src
+
+    ~../foo/bar~ resolves to a path under a /sibling/ directory (~foo~) of the
+    persitent storage path, rather than resolving to a child path of the
+    persistent storage path.
+
+    /Note/, however, that the following configuration is acceptable:
+
+    #+begin_src nix
+      {
+        environment.persistence = {
+          "/abc".files = [ "foo/../bar" ];
+        };
+      }
+    #+end_src
+
+    Impermanence can resolve ~foo/../bar~ to just ~bar~ without traversing out
+    of the persistent storage path.
 
 *** home-manager
 
