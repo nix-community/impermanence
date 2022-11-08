@@ -22,7 +22,7 @@ let
   # ["/home/user/" "/.screenrc"] -> ["home" "user" ".screenrc"]
   splitPath = paths:
     (filter
-      (s: builtins.typeOf s == "string" && s != "")
+      (s: builtins.typeOf s == "string" && s != "" && s != ".")
       (concatMap (builtins.split "/") paths)
     );
 
