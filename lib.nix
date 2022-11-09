@@ -17,6 +17,8 @@ let
     zipAttrsWith
     flatten
     attrValues
+    unique
+    concatMap
     ;
   inherit (lib.strings)
     sanitizeDerivationName
@@ -150,6 +152,18 @@ let
     in
     dirs: toposort dirBefore (normalizeDirs dirs);
 
+  recursivePersistentPaths =
+    let
+      pointsIntoPersistentStoragePath = a: b: strictPrefix b.normalized.persistentStoragePath a.normalized.destination;
+      findMatches = dir: dirs: unique (map (match: match.persistentStoragePath) (filter (pointsIntoPersistentStoragePath dir) dirs));
+      mapMatches = dir: dirs: map (match: { inherit (dir) destination source; persistentStoragePath = match; }) (findMatches dir dirs);
+    in
+    dirs:
+    let
+      normalized = normalizeDirs dirs;
+    in
+    concatMap (dir: mapMatches dir normalized) normalized;
+
   extractPersistentStoragePaths = cfg: { directories = [ ]; files = [ ]; users = [ ]; }
     // (zipAttrsWith (_name: flatten) (filter (v: v.enable) (attrValues cfg)));
 in
@@ -166,5 +180,6 @@ in
     coercedToFile
     toposortDirs
     extractPersistentStoragePaths
+    recursivePersistentPaths
     ;
 }
