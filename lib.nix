@@ -25,7 +25,7 @@ let
     ;
   inherit (lib.types)
     coercedTo
-    str
+    nonEmptyStr
     ;
 
   # ["/home/user/" "/.screenrc"] -> ["home" "user" ".screenrc"]
@@ -97,8 +97,8 @@ let
     in
     result.duplicates;
 
-  coercedToDir = coercedTo str (directory: { inherit directory; });
-  coercedToFile = coercedTo str (file: { inherit file; });
+  coercedToDir = coercedTo nonEmptyStr (directory: { inherit directory; });
+  coercedToFile = coercedTo nonEmptyStr (file: { inherit file; });
 
   # Append a trailing slash to a path if it does not already have one.
   #

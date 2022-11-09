@@ -351,7 +351,7 @@ in
                 imports = [ (commonOpts { pathType = "file"; }) ];
                 options = {
                   file = mkOption {
-                    type = str;
+                    type = nonEmptyStr;
                     description = ''
                       The path to the file.
                     '';
@@ -371,7 +371,7 @@ in
                 options = {
                   directory = mkOption {
                     inherit internal;
-                    type = str;
+                    type = nonEmptyStr;
                     description = ''
                       The path to the directory.
                     '';
