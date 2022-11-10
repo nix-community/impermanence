@@ -6,7 +6,7 @@ let
   inherit (nixpkgs.lib) any escapeShellArg nixosSystem runTests;
 
   inherit (pkgs.callPackage ../lib.nix { }) cleanPath splitPath dirListToPath
-    concatPaths;
+    concatPaths extractPersistentStoragePaths toposortDirs;
 
   mkSystem = config: nixosSystem {
     inherit system;
@@ -91,6 +91,44 @@ let
         "/abc".users.auser.files = [ "/a/file" ];
       };
     };
+
+    testNoSpuriousSourcePrefixDetection =
+      let
+        result = mkSystem {
+          environment.persistence = {
+            "/1".directories = [ "/abc/def/ghi" ];
+            "/12".directories = [ "/abc/def" ];
+            "/123".directories = [ "/abc" ];
+          };
+        };
+
+        paths = extractPersistentStoragePaths result.config.environment.persistence;
+
+        sortedDirs = toposortDirs paths.directories;
+      in
+      {
+        expected = [ "/123" "/12" "/1" ];
+        expr = map (dir: dir.persistentStoragePath) sortedDirs.result;
+      };
+
+    testNoSpuriousDestinationPrefixDetection =
+      let
+        result = mkSystem {
+          environment.persistence = {
+            "/abc/def/ghi".directories = [ "/1" ];
+            "/abc/def".directories = [ "/12" ];
+            "/abc".directories = [ "/123" ];
+          };
+        };
+
+        paths = extractPersistentStoragePaths result.config.environment.persistence;
+
+        sortedDirs = toposortDirs paths.directories;
+      in
+      {
+        expected = [ "/abc" "/abc/def" "/abc/def/ghi" ];
+        expr = map (dir: dir.persistentStoragePath) (sortedDirs.result or [ ]);
+      };
 
     testNoPathTraversalAllowed = checkEvalError (cleanPath "../foo/bar");
 

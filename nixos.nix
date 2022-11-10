@@ -50,11 +50,13 @@ let
     duplicates
     coercedToDir
     coercedToFile
+    toposortDirs
+    extractPersistentStoragePaths
     ;
 
   cfg = config.environment.persistence;
   users = config.users.users;
-  allPersistentStoragePaths = zipAttrsWith (_name: flatten) (filter (v: v.enable) (attrValues cfg));
+  allPersistentStoragePaths = extractPersistentStoragePaths cfg;
   inherit (allPersistentStoragePaths) files directories;
   mountFile = pkgs.runCommand "impermanence-mount-file" { buildInputs = [ pkgs.bash ]; } ''
     cp ${./mount-file.bash} $out
@@ -82,6 +84,133 @@ let
   # Create all fileSystems bind mount entries for a specific
   # persistent storage path.
   bindMounts = listToAttrs (map mkBindMountNameValuePair directories);
+
+  # Topologically sort the directories we need to create, chown, chmod, etc.
+  # The idea is to handle more "fundamental" directories (fewer "/" elements)
+  # first, and also to prefer explicitly-defined directories over
+  # implicitly-defined ones (<- created as parent directories of
+  # explicitly-specified files).
+  sortedDirs =
+    let
+      # The parent directories of files.
+      fileDirs = unique (catAttrs "parentDirectory" files);
+
+      # All the directories actually listed by the user and the
+      # parent directories of listed files.
+      explicitDirs = directories ++ fileDirs;
+
+      # Home directories have to be handled specially, since
+      # they're at the permissions boundary where they
+      # themselves should be owned by the user and have stricter
+      # permissions than regular directories, whereas its parent
+      # should be owned by root and have regular permissions.
+      #
+      # This simply collects all the home directories and sets
+      # the appropriate permissions and ownership.
+      homeDirs =
+        foldl'
+          (state: dir:
+            let
+              homeDir =
+                let
+                  relpath = concatPaths [ dir.prefix dir.home ];
+                in
+                {
+                  directory = dir.home;
+                  home = null;
+                  mode = "0700";
+                  user = dir.user;
+                  group = users.${dir.user}.group;
+                  source = concatPaths [ dir.persistentStoragePath relpath ];
+                  destination = concatPaths [ "/" relpath ];
+                  inherit defaultPerms relpath;
+                  inherit (dir) persistentStoragePath enableDebugging prefix;
+                };
+            in
+            if dir.home != null then
+              if !(elem homeDir state) then
+                state ++ [ homeDir ]
+              else
+                state
+            else
+              state
+          )
+          [ ]
+          explicitDirs;
+
+      # Persistent storage directories. These need to be created
+      # unless they're at the root of a filesystem.
+      persistentStorageDirs =
+        foldl'
+          (state: dir:
+            let
+              relpath = concatPaths [ dir.prefix dir.persistentStoragePath ];
+              persistentStorageDir = {
+                directory = dir.persistentStoragePath;
+                persistentStoragePath = "";
+                home = null;
+                destination = concatPaths [ "/" relpath ];
+                source = concatPaths [ "/" relpath ];
+                inherit (dir) defaultPerms enableDebugging root prefix;
+                inherit (dir.defaultPerms) user group mode;
+              };
+            in
+            if dir.home == null && !(elem persistentStorageDir state) then
+              state ++ [ persistentStorageDir ]
+            else
+              state
+          )
+          [ ]
+          (explicitDirs ++ homeDirs);
+
+      # Generate entries for all parent directories of the
+      # argument directories, listed in the order they need to
+      # be created. The parent directories are assigned default
+      # permissions.
+      mkParentDirs = dirs:
+        let
+          # Create a new directory item from `dir`, the child
+          # directory item to inherit properties from and
+          # `path`, the parent directory path.
+          mkParent = dir: path:
+            let
+              relpath = concatPaths [ dir.prefix path ];
+            in
+            {
+              inherit relpath;
+              directory = path;
+              source = concatPaths [ dir.persistentStoragePath relpath ];
+              destination = concatPaths [ "/" relpath ];
+              inherit (dir) persistentStoragePath home root enableDebugging;
+              inherit (dir.defaultPerms) user group mode;
+            };
+          # Create new directory items for all parent
+          # directories of a directory.
+          mkParents = dir:
+            map (mkParent dir) (parentsOf dir.directory);
+        in
+        unique (flatten (map mkParents dirs));
+
+      persistentStorageDirParents = mkParentDirs persistentStorageDirs;
+
+      # Parent directories of home folders. This is usually only
+      # /home, unless the user's home is in a non-standard
+      # location.
+      homeDirParents = mkParentDirs homeDirs;
+
+      # Parent directories of all explicitly listed directories.
+      parentDirs = mkParentDirs explicitDirs;
+
+      # All directories in the order they should be created.
+      allDirs =
+        persistentStorageDirParents
+        ++ persistentStorageDirs
+        ++ homeDirParents
+        ++ homeDirs
+        ++ parentDirs
+        ++ explicitDirs;
+    in
+    toposortDirs allDirs;
 in
 {
   options = {
@@ -617,115 +746,10 @@ in
             # Build an activation script which creates all persistent
             # storage directories we want to bind mount.
             dirCreationScript =
-              let
-                # The parent directories of files.
-                fileDirs = unique (catAttrs "parentDirectory" files);
-
-                # All the directories actually listed by the user and the
-                # parent directories of listed files.
-                explicitDirs = directories ++ fileDirs;
-
-                # Home directories have to be handled specially, since
-                # they're at the permissions boundary where they
-                # themselves should be owned by the user and have stricter
-                # permissions than regular directories, whereas its parent
-                # should be owned by root and have regular permissions.
-                #
-                # This simply collects all the home directories and sets
-                # the appropriate permissions and ownership.
-                homeDirs =
-                  foldl'
-                    (state: dir:
-                      let
-                        homeDir = {
-                          directory = dir.home;
-                          destination = dir.home;
-                          home = null;
-                          mode = "0700";
-                          user = dir.user;
-                          group = users.${dir.user}.group;
-                          inherit defaultPerms;
-                          inherit (dir) persistentStoragePath enableDebugging;
-                        };
-                      in
-                      if dir.home != null then
-                        if !(elem homeDir state) then
-                          state ++ [ homeDir ]
-                        else
-                          state
-                      else
-                        state
-                    )
-                    [ ]
-                    explicitDirs;
-
-                # Persistent storage directories. These need to be created
-                # unless they're at the root of a filesystem.
-                persistentStorageDirs =
-                  foldl'
-                    (state: dir:
-                      let
-                        persistentStorageDir = {
-                          directory = dir.persistentStoragePath;
-                          destination = dir.persistentStoragePath;
-                          persistentStoragePath = "";
-                          home = null;
-                          inherit (dir) defaultPerms enableDebugging;
-                          inherit (dir.defaultPerms) user group mode;
-                        };
-                      in
-                      if dir.home == null && !(elem persistentStorageDir state) then
-                        state ++ [ persistentStorageDir ]
-                      else
-                        state
-                    )
-                    [ ]
-                    (explicitDirs ++ homeDirs);
-
-                # Generate entries for all parent directories of the
-                # argument directories, listed in the order they need to
-                # be created. The parent directories are assigned default
-                # permissions.
-                mkParentDirs = dirs:
-                  let
-                    # Create a new directory item from `dir`, the child
-                    # directory item to inherit properties from and
-                    # `path`, the parent directory path.
-                    mkParent = dir: path: {
-                      directory = path;
-                      inherit (dir) persistentStoragePath home enableDebugging destination;
-                      inherit (dir.defaultPerms) user group mode;
-                    };
-                    # Create new directory items for all parent
-                    # directories of a directory.
-                    mkParents = dir:
-                      map (mkParent dir) (parentsOf dir.directory);
-                  in
-                  unique (flatten (map mkParents dirs));
-
-                persistentStorageDirParents = mkParentDirs persistentStorageDirs;
-
-                # Parent directories of home folders. This is usually only
-                # /home, unless the user's home is in a non-standard
-                # location.
-                homeDirParents = mkParentDirs homeDirs;
-
-                # Parent directories of all explicitly listed directories.
-                parentDirs = mkParentDirs explicitDirs;
-
-                # All directories in the order they should be created.
-                allDirs =
-                  persistentStorageDirParents
-                  ++ persistentStorageDirs
-                  ++ homeDirParents
-                  ++ homeDirs
-                  ++ parentDirs
-                  ++ explicitDirs;
-              in
               pkgs.writeShellScript "impermanence-run-create-directories" ''
                 _status=0
                 trap "_status=1" ERR
-                ${concatMapStrings mkDirWithPerms allDirs}
+                ${concatMapStrings mkDirWithPerms sortedDirs.result}
                 exit $_status
               '';
 
@@ -939,6 +963,26 @@ in
                       The following directories were specified two or more
                       times:
                         ${concatStringsSep "\n      " offenders}
+                '';
+            }
+            {
+              assertion = !(sortedDirs ? cycle);
+              message =
+                let
+                  showChain = sep: concatMapStringsSep sep (dir: "'${dir.source}:${dir.destination}'");
+                  dummyDir = { source = "<none>"; destination = "<none>"; };
+                  cycle = showChain " -> " (sortedDirs.cycle or [ dummyDir ]);
+                  loops = showChain ", " (sortedDirs.loops or [ dummyDir ]);
+                in
+                ''
+                  environment.persistence:
+                      Unable to topologically sort persistent storage source and destination directories (directories shown below as '<source>:<destination>'):
+
+                      Persistent storage directory dependency path ${cycle} loops to ${loops}.
+
+                      This can happen when the source path of one directory is a prefix of the source path of a second, and the destination path of the second directory is a prefix of the destination path of the first.
+
+                      Issues like these prevent the 'environment.persistence' module from creating source and destination directories and setting their permissions in a stable and consistent order.
                 '';
             }
           ];
