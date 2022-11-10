@@ -108,21 +108,17 @@ pkgs.nixosTest ({ system, ... }:
       stat_fmt = ['%F']
       checks = [('type', type)]
 
-      # XXX disabled until directory creation ordering and permissions-handling
-      # updates are in place.  For now we just assert that the file exists and
-      # is of the expected type.
-      if False:
-        if mode is not None:
-          stat_fmt.append('%#a')
-          checks.append(('mode', mode))
+      if mode is not None:
+        stat_fmt.append('%#a')
+        checks.append(('mode', mode))
 
-        if user is not None:
-          stat_fmt.append('%U')
-          checks.append(('user', user))
+      if user is not None:
+        stat_fmt.append('%U')
+        checks.append(('user', user))
 
-        if group is not None:
-          stat_fmt.append('%G')
-          checks.append(('group', group))
+      if group is not None:
+        stat_fmt.append('%G')
+        checks.append(('group', group))
 
       printf_arg = '\\n'.join(stat_fmt) + '\\n'
 
