@@ -47,44 +47,17 @@ fi
 sourceBase="${sourceBase%/}"
 target="${target%/}"
 
-# check that the source exists and warn the user if it doesn't
+# check that the source exists and warn the user if it doesn't, then
+# create them with the specified permissions
 realSource="$(realpath -m "$sourceBase$target")"
 if [[ ! -d "$realSource" ]]; then
     printf "Warning: Source directory '%s' does not exist; it will be created for you with the following permissions: owner: '%s:%s', mode: '%s'.\n" "$realSource" "$user" "$group" "$mode"
+    mkdir --mode="$mode" "$realSource"
+    chown "$user:$group" "$realSource"
 fi
 
-# iterate over each part of the target path, e.g. var, lib, iwd
-previousPath="/"
+[[ -d "$target" ]] || mkdir "$target"
 
-OLD_IFS=$IFS
-IFS=/ # split the path on /
-for pathPart in $target; do
-    IFS=$OLD_IFS
-
-    # skip empty parts caused by the prefix slash and multiple
-    # consecutive slashes
-    [[ "$pathPart" == "" ]] && continue
-
-    # construct the incremental path, e.g. /var, /var/lib, /var/lib/iwd
-    currentTargetPath="$previousPath$pathPart/"
-
-    # construct the source path, e.g. /state/var, /state/var/lib, ...
-    currentSourcePath="$sourceBase$currentTargetPath"
-
-    # create the source and target directories if they don't exist
-    if [[ ! -d "$currentSourcePath" ]]; then
-        mkdir --mode="$mode" "$currentSourcePath"
-        chown "$user:$group" "$currentSourcePath"
-    fi
-    [[ -d "$currentTargetPath" ]] || mkdir "$currentTargetPath"
-
-    # resolve the source path to avoid symlinks
-    currentRealSourcePath="$(realpath -m "$currentSourcePath")"
-
-    # synchronize perms between source and target
-    chown --reference="$currentRealSourcePath" "$currentTargetPath"
-    chmod --reference="$currentRealSourcePath" "$currentTargetPath"
-
-    # lastly we update the previousPath to continue down the tree
-    previousPath="$currentTargetPath"
-done
+# synchronize perms between source and target
+chown --reference="$realSource" "$target"
+chmod --reference="$realSource" "$target"

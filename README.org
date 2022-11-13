@@ -109,10 +109,10 @@
       - ~mode~, the permissions to set for the directory. If the
         directory doesn't already exist in persistent storage, it will
         be created with this mode. Can be either an octal mode
-        (e.g. ~0700~) or a symbolic mode (e.g. ~u=rwx,g=,o=~). This also
-        applies to any parent directories which don't yet exist.
-        Changing this once the directory has been created has no
-        effect.
+        (e.g. ~0700~) or a symbolic mode (e.g. ~u=rwx,g=,o=~). Parent
+        directories that don't yet exist are created with default
+        permissions. Changing this once the directory has been created
+        has no effect.
 
     - ~files~ are all files you want to link or bind to persistent
       storage. A file can be represented either as a string, simply

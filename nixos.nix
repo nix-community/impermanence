@@ -26,6 +26,9 @@ let
     catAttrs
     optional
     literalExpression
+    optionalString
+    elem
+    mapAttrs
     ;
 
   inherit (pkgs.callPackage ./lib.nix { })
@@ -34,6 +37,7 @@ let
     concatPaths
     sanitizeName
     duplicates
+    parentsOf
     ;
 
   cfg = config.environment.persistence;
@@ -147,7 +151,10 @@ in
                       The path to the file.
                     '';
                   };
-                  parentDirectory = dirPermsOpts;
+                  parentDirectory = dirPermsOpts // {
+                    # See comment in dirOpts below for an explanation.
+                    defaultPerms = mapAttrs (_: x: x // { internal = true; }) dirPermsOpts;
+                  };
                   filePath = mkOption {
                     type = path;
                     internal = true;
@@ -162,6 +169,12 @@ in
                       The path to the directory.
                     '';
                   };
+                  # Save the default permissions at the level the
+                  # directory resides. This used when creating its
+                  # parent directories, giving them reasonable
+                  # default permissions unaffected by the
+                  # directory's own.
+                  defaultPerms = mapAttrs (_: x: x // { internal = true; }) dirPermsOpts;
                   dirPath = mkOption {
                     type = path;
                     internal = true;
@@ -172,7 +185,7 @@ in
                 commonOpts
                 fileOpts
                 ({ config, ... }: {
-                  parentDirectory = mkDefault defaultPerms;
+                  parentDirectory = mkDefault (defaultPerms // { inherit defaultPerms; });
                   filePath = mkDefault config.file;
                 })
               ];
@@ -180,6 +193,7 @@ in
                 commonOpts
                 dirOpts
                 ({ config, ... }: {
+                  defaultPerms = mkDefault defaultPerms;
                   dirPath = mkDefault config.directory;
                 })
               ] ++ (mapAttrsToList (n: v: { ${n} = mkDefault v; }) defaultPerms));
@@ -200,6 +214,7 @@ in
                           fileConfig =
                             { config, ... }:
                             {
+                              parentDirectory = mkDefault (userDefaultPerms // { defaultPerms = userDefaultPerms; });
                               filePath =
                                 if config.home != null then
                                   concatPaths [ config.home config.file ]
@@ -209,13 +224,13 @@ in
                           userFile = submodule [
                             commonOpts
                             fileOpts
-                            { parentDirectory = mkDefault userDefaultPerms; }
                             { inherit (config) home; }
                             fileConfig
                           ];
                           dirConfig =
                             { config, ... }:
                             {
+                              defaultPerms = mkDefault userDefaultPerms;
                               dirPath =
                                 if config.home != null then
                                   concatPaths [ config.home config.directory ]
@@ -480,7 +495,8 @@ in
         # storage directories we want to bind mount.
         dirCreationScript =
           let
-            fileDirectories = unique (map
+            # The parent directories of files.
+            fileDirs = unique (map
               (f:
                 rec {
                   directory = dirOf f.file;
@@ -492,11 +508,90 @@ in
                   inherit (f) persistentStoragePath home;
                 } // f.parentDirectory)
               files);
+
+            # All the directories actually listed by the user and the
+            # parent directories of listed files.
+            explicitDirs = directories ++ fileDirs;
+
+            # Home directories have to be handled specially, since
+            # they're at the permissions boundary where they
+            # themselves should be owned by the user and have stricter
+            # permissions than regular directories, whereas its parent
+            # should be owned by root and have regular permissions.
+            #
+            # This simply collects all the home directories and sets
+            # the appropriate permissions and ownership.
+            homeDirs =
+              foldl'
+                (state: dir:
+                  let
+                    defaultPerms = {
+                      mode = "0755";
+                      user = "root";
+                      group = "root";
+                    };
+                    homeDir = {
+                      directory = dir.home;
+                      dirPath = dir.home;
+                      home = null;
+                      mode = "0700";
+                      user = dir.user;
+                      group = users.${dir.user}.group;
+                      inherit defaultPerms;
+                      inherit (dir) persistentStoragePath;
+                    };
+                  in
+                  if dir.home != null then
+                    if !(elem homeDir state) then
+                      state ++ [ homeDir ]
+                    else
+                      state
+                  else
+                    state)
+                [ ]
+                explicitDirs;
+
+            # Generate entries for all parent directories of the
+            # argument directories, listed in the order they need to
+            # be created. The parent directories are assigned default
+            # permissions.
+            mkParentDirs = dirs:
+              let
+                # Create a new directory item from `dir`, the child
+                # directory item to inherit properties from and
+                # `path`, the parent directory path.
+                mkParent = dir: path: {
+                  directory = path;
+                  dirPath =
+                    if dir.home != null then
+                      concatPaths [ dir.home path ]
+                    else
+                      path;
+                  inherit (dir) persistentStoragePath home;
+                  inherit (dir.defaultPerms) user group mode;
+                };
+                # Create new directory items for all parent
+                # directories of a directory.
+                mkParents = dir:
+                  map (mkParent dir) (parentsOf dir.directory);
+              in
+              unique (flatten (map mkParents dirs));
+
+            # Parent directories of home folders. This is usually only
+            # /home, unless the user's home is in a non-standard
+            # location.
+            homeDirParents = mkParentDirs homeDirs;
+
+            # Parent directories of all explicitly listed directories.
+            parentDirs = mkParentDirs explicitDirs;
+
+            # All directories in the order they should be created.
+            allDirs = homeDirParents ++ homeDirs ++ parentDirs ++ explicitDirs;
           in
           pkgs.writeShellScript "impermanence-run-create-directories" ''
             _status=0
             trap "_status=1" ERR
-            ${concatMapStrings mkDirWithPerms (directories ++ fileDirectories)}
+            ${concatMapStrings mkDirWithPerms allDirs}
             exit $_status
           '';
 

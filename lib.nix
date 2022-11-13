@@ -11,6 +11,9 @@ let
     removePrefix
     foldl'
     elem
+    take
+    length
+    last
     ;
   inherit (lib.strings)
     sanitizeDerivationName
@@ -33,6 +36,24 @@ let
       path = dirListToPath (splitPath paths);
     in
     prefix + path;
+
+
+  parentsOf = path:
+    let
+      prefix = optionalString (hasPrefix "/" path) "/";
+      split = splitPath [ path ];
+      parents = take ((length split) - 1) split;
+    in
+    foldl'
+      (state: item:
+        state ++ [
+          (concatPaths [
+            (if state != [ ] then last state else prefix)
+            item
+          ])
+        ])
+      [ ]
+      parents;
 
   sanitizeName = name:
     replaceStrings
@@ -63,6 +84,7 @@ in
     splitPath
     dirListToPath
     concatPaths
+    parentsOf
     sanitizeName
     duplicates
     ;
