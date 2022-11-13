@@ -322,19 +322,7 @@ in
                     '';
                   };
 
-                  presets = {
-                    essential.enable = mkEnableOption ''
-                      essential presets. Without those, you will likely get an unusable,
-                      broken, or prone to corrupting over time system. It is recommended
-                      to back up those entries
-                    '';
-                    system.enable = mkEnableOption ''
-                      system presets. Those are not necessary for having a working system,
-                      but they are often desired: stuff like preserving passwords
-                      for Network Manager goes in here. It is not recommended to
-                      back up those entries
-                    '';
-                  };
+                  presets = (import ./presets { inherit config systemConfig lib; }).presets;
                 };
               config =
                 let
