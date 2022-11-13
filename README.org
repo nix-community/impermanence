@@ -30,6 +30,20 @@
     attribute set of submodules, where the attribute name is the path
     to persistent storage.
 
+    The easiest way to use the module is to enable community-defined presets:
+
+    #+begin_src nix
+      {
+        environment.persistence."/backed-up" = {
+          presets.essential.enable = true;
+        };
+
+        environment.persistence."/not-backed-up" = {
+          presets.system.enable = true;
+        };
+      }
+    #+end_src
+
     Usage is shown best with an example:
 
     #+begin_src nix
