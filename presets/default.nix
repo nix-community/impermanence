@@ -1,11 +1,11 @@
 { config, systemConfig, lib }:
 
 let
-  inherit (lib) optionals foldAttrs;
+  inherit (lib) optionals foldAttrs optionalAttrs;
 
-  buildPreset = { option, files ? [ ], directories ? [ ] }: {
-    files = optionals option files;
-    directories = optionals option directories;
+  buildPreset = name: value: {
+    files = optionals (value.option or systemConfig.services."${name}".enable) (value.files or [ ]);
+    directories = optionals (value.option or systemConfig.services."${name}".enable) (value.directories or [ ]);
   };
 
   essential = { 
@@ -14,9 +14,11 @@ let
     directories = [ "/var/lib/nixos" ];
   };
 
-  allPresets = builtins.map (x: buildPreset x) [ essential ]
-    ++ optionals config.presets.system.enable (import ./system.nix { inherit systemConfig lib; });
-  appliedPresets = foldAttrs (val: col: val ++ col) [] allPresets;
+  allPresets = builtins.mapAttrs (name: value: buildPreset name value)
+  { inherit essential; } //
+  optionalAttrs config.presets.system.enable (import ./system.nix { inherit systemConfig lib; });
+
+  appliedPresets = foldAttrs (val: col: val ++ col) [] (builtins.attrValues allPresets);
 in
 {
   files = appliedPresets.files;

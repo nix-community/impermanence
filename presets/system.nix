@@ -3,13 +3,10 @@
 let
   inherit (systemConfig) networking services;
 in
-[
-  {
+{
+  networkmanager = {
     option = networking.networkmanager.enable;
     directories = [ "/etc/NetworkManager/system-connections" ];
-  }
-  {
-    option = services.tailscale.enable;
-    directories = [ "/var/lib/tailscale" ];
-  }
-]
+  };
+  tailscale.directories = [ "/var/lib/tailscale" ];
+}
