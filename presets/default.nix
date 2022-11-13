@@ -15,7 +15,7 @@ let
   };
 
   allPresets = builtins.map (x: buildPreset x) [ essential ]
-    ++ (import ./system.nix { inherit config systemConfig lib; });
+    ++ optionals config.presets.system.enable (import ./system.nix { inherit systemConfig lib; });
   appliedPresets = foldAttrs (val: col: val ++ col) [] allPresets;
 in
 {
