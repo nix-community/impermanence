@@ -205,7 +205,7 @@ in
                                 '';
                               };
                               files = mkOption {
-                                type = listOf (either str userFile);
+                                type = listOf (coercedTo str (f: { file = f; }) userFile);
                                 default = [ ];
                                 example = [
                                   ".screenrc"
@@ -214,22 +214,10 @@ in
                                   Files that should be stored in
                                   persistent storage.
                                 '';
-                                apply =
-                                  map (file:
-                                    if isString file then
-                                      {
-                                        inherit persistentStoragePath;
-                                        file = concatPaths [ config.home file ];
-                                        parentDirectory = userDefaultPerms;
-                                      }
-                                    else
-                                      file // {
-                                        file = concatPaths [ config.home file.file ];
-                                      });
                               };
 
                               directories = mkOption {
-                                type = listOf (either str userDir);
+                                type = listOf (coercedTo str (d: { directory = d; }) userDir);
                                 default = [ ];
                                 example = [
                                   "Downloads"
@@ -242,17 +230,6 @@ in
                                   Directories to bind mount to
                                   persistent storage.
                                 '';
-                                apply =
-                                  map (directory:
-                                    if isString directory then
-                                      userDefaultPerms // {
-                                        directory = concatPaths [ config.home directory ];
-                                        inherit persistentStoragePath;
-                                      }
-                                    else
-                                      directory // {
-                                        directory = concatPaths [ config.home directory.directory ];
-                                      });
                               };
                             };
                         }
@@ -295,7 +272,7 @@ in
                   };
 
                   files = mkOption {
-                    type = listOf (either str rootFile);
+                    type = listOf (coercedTo str (f: { file = f; }) rootFile);
                     default = [ ];
                     example = [
                       "/etc/machine-id"
@@ -304,19 +281,10 @@ in
                     description = ''
                       Files that should be stored in persistent storage.
                     '';
-                    apply =
-                      map (file:
-                        if isString file then
-                          {
-                            inherit file persistentStoragePath;
-                            parentDirectory = defaultPerms;
-                          }
-                        else
-                          file);
                   };
 
                   directories = mkOption {
-                    type = listOf (either str rootDir);
+                    type = listOf (coercedTo str (d: { directory = d; }) rootDir);
                     default = [ ];
                     example = [
                       "/var/log"
@@ -328,14 +296,6 @@ in
                     description = ''
                       Directories to bind mount to persistent storage.
                     '';
-                    apply =
-                      map (directory:
-                        if isString directory then
-                          defaultPerms // {
-                            inherit directory persistentStoragePath;
-                          }
-                        else
-                          directory);
                   };
 
                   hideMounts = mkOption {
