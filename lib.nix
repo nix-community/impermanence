@@ -1,8 +1,20 @@
 { lib }:
 let
-  inherit (lib) filter concatMap concatStringsSep hasPrefix head
-    replaceStrings optionalString removePrefix foldl' elem;
-  inherit (lib.strings) sanitizeDerivationName;
+  inherit (lib)
+    filter
+    concatMap
+    concatStringsSep
+    hasPrefix
+    head
+    replaceStrings
+    optionalString
+    removePrefix
+    foldl'
+    elem
+    ;
+  inherit (lib.strings)
+    sanitizeDerivationName
+    ;
 
   # ["/home/user/" "/.screenrc"] -> ["home" "user" ".screenrc"]
   splitPath = paths:
@@ -47,5 +59,11 @@ let
     result.duplicates;
 in
 {
-  inherit splitPath dirListToPath concatPaths sanitizeName duplicates;
+  inherit
+    splitPath
+    dirListToPath
+    concatPaths
+    sanitizeName
+    duplicates
+    ;
 }

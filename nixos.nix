@@ -1,14 +1,40 @@
 { pkgs, config, lib, ... }:
 
 let
-  inherit (lib) attrNames attrValues zipAttrsWith flatten mkOption
-    mkDefault mapAttrsToList types foldl' unique concatMapStrings
-    listToAttrs escapeShellArg escapeShellArgs recursiveUpdate all
-    filter filterAttrs concatStringsSep concatMapStringsSep isString
-    catAttrs optional literalExpression;
+  inherit (lib)
+    attrNames
+    attrValues
+    zipAttrsWith
+    flatten
+    mkOption
+    mkDefault
+    mapAttrsToList
+    types
+    foldl'
+    unique
+    concatMapStrings
+    listToAttrs
+    escapeShellArg
+    escapeShellArgs
+    recursiveUpdate
+    all
+    filter
+    filterAttrs
+    concatStringsSep
+    concatMapStringsSep
+    isString
+    catAttrs
+    optional
+    literalExpression
+    ;
 
-  inherit (pkgs.callPackage ./lib.nix { }) splitPath dirListToPath
-    concatPaths sanitizeName duplicates;
+  inherit (pkgs.callPackage ./lib.nix { })
+    splitPath
+    dirListToPath
+    concatPaths
+    sanitizeName
+    duplicates
+    ;
 
   cfg = config.environment.persistence;
   users = config.users.users;
@@ -43,7 +69,17 @@ in
       default = { };
       type =
         let
-          inherit (types) attrsOf bool listOf submodule path either str;
+          inherit (types)
+            attrsOf
+            bool
+            listOf
+            submodule
+            nullOr
+            path
+            either
+            str
+            coercedTo
+            ;
         in
         attrsOf (
           submodule (
