@@ -14,7 +14,8 @@ let
     directories = [ "/var/lib/nixos" ];
   };
 
-  allPresets = builtins.map (x: buildPreset x) [ essential ];
+  allPresets = builtins.map (x: buildPreset x) [ essential ]
+    ++ (import ./system.nix { inherit config systemConfig lib; });
   appliedPresets = foldAttrs (val: col: val ++ col) [] allPresets;
 in
 {

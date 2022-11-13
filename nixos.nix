@@ -324,6 +324,11 @@ in
 
                   presets = {
                     essential.enable = mkEnableOption "essential presets";
+                    system.enable = mkEnableOption ''
+                      system presets. Those are not necessary for having a working system,
+                      but they are often desired: stuff like preserving passwords
+                      for Network Manager goes in here
+                    '';
                   };
                 };
               config =
