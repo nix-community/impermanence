@@ -12,6 +12,7 @@ let
 
   cfg = config.environment.persistence;
   users = config.users.users;
+  systemConfig = config;
   allPersistentStoragePaths = { directories = [ ]; files = [ ]; users = [ ]; }
     // (zipAttrsWith (_name: flatten) (attrValues cfg));
   inherit (allPersistentStoragePaths) files directories;
@@ -328,10 +329,11 @@ in
               config =
                 let
                   allUsers = zipAttrsWith (_name: flatten) (attrValues config.users);
+                  appliedPresets = import ./presets { inherit config systemConfig lib; };
                 in
                 {
-                  files = (allUsers.files or [ ]) ++ lib.optionals config.presets.essential.enable [ "/etc/machine-id" ];
-                  directories = (allUsers.directories or [ ]) ++ lib.optionals config.presets.essential.enable [ "/var/lib/nixos" ];
+                  files = (allUsers.files or [ ]) ++ appliedPresets.files;
+                  directories = (allUsers.directories or [ ]) ++ appliedPresets.directories;
                 };
             }
           )
