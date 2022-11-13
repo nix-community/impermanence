@@ -5,7 +5,7 @@ let
     types foldl' unique noDepEntry concatMapStrings listToAttrs
     escapeShellArg escapeShellArgs replaceStrings recursiveUpdate all
     filter filterAttrs concatStringsSep concatMapStringsSep isString
-    catAttrs optional literalExpression;
+    catAttrs optional literalExpression mkEnableOption;
 
   inherit (pkgs.callPackage ./lib.nix { }) splitPath dirListToPath
     concatPaths sanitizeName duplicates;
@@ -320,14 +320,18 @@ in
                       to.
                     '';
                   };
+
+                  presets = {
+                    essential.enable = mkEnableOption "essential presets";
+                  };
                 };
               config =
                 let
                   allUsers = zipAttrsWith (_name: flatten) (attrValues config.users);
                 in
                 {
-                  files = allUsers.files or [ ];
-                  directories = allUsers.directories or [ ];
+                  files = (allUsers.files or [ ]) ++ lib.optionals config.presets.essential.enable [ "/etc/machine-id" ];
+                  directories = (allUsers.directories or [ ]) ++ lib.optionals config.presets.essential.enable [ "/var/lib/nixos" ];
                 };
             }
           )
