@@ -28,9 +28,8 @@ if [[ -L "$mountPoint" && $(readlink -f "$mountPoint") == "$targetFile" ]]; then
 elif mount | grep -F "$mountPoint"' ' >/dev/null && ! mount | grep -F "$mountPoint"/ >/dev/null; then
     echo "mount already exists at $mountPoint, ignoring"
 elif [[ -e "$mountPoint" ]]; then
-    echo "a file already exists at $mountPoint, turning it into symlink"
-    cp "$mountPoint" "$targetFile"
-    ln -s "$targetFile" "$mountPoint"
+    echo "A file already exists at $mountPoint!" >&2
+    exit 1
 elif [[ -e "$targetFile" ]]; then
     touch "$mountPoint"
     mount -o bind "$targetFile" "$mountPoint"
