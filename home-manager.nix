@@ -415,6 +415,7 @@ in
             dag.entryBefore
               [ "createAndMountPersistentStoragePaths" ]
               ''
+                PATH=$PATH:/run/wrappers/bin
                 unmountBindMounts() {
                 ${concatMapStrings mkUnmountsForPath persistentStoragePaths}
                 }
