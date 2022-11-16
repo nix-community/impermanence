@@ -105,6 +105,15 @@ in
                     '';
                   };
                   parentDirectory = dirPermsOpts perms;
+                  force = mkOption {
+                    type = bool;
+                    default = false;
+                    description = ''
+                      Whether to replace the mountpoint file if it
+                      already exists. This will not replace a
+                      directory if present.
+                    '';
+                  };
                 };
               };
               dirOpts = perms: {
@@ -185,6 +194,7 @@ in
                                         inherit persistentStoragePath;
                                         file = concatPaths [ config.home file ];
                                         parentDirectory = userDefaultPerms;
+                                        force = false;
                                       }
                                     else
                                       file // {
@@ -274,6 +284,7 @@ in
                           {
                             inherit file persistentStoragePath;
                             parentDirectory = defaultPerms;
+                            force = false;
                           }
                         else
                           file);
@@ -356,6 +367,7 @@ in
             files = [
               "/etc/machine-id"
               { file = "/etc/nix/id_rsa"; parentDirectory = { mode = "u=rwx,g=,o="; }; }
+              { file = "/etc/shadow"; force = true; }; }
             ];
           };
           users.talyz = { ... }; # See the dedicated example
@@ -371,7 +383,7 @@ in
   config = {
     systemd.services =
       let
-        mkPersistFileService = { file, persistentStoragePath, ... }:
+        mkPersistFileService = { file, persistentStoragePath, force, ... }:
           let
             targetFile = escapeShellArg (concatPaths [ persistentStoragePath file ]);
             mountPoint = escapeShellArg file;
@@ -387,7 +399,7 @@ in
               serviceConfig = {
                 Type = "oneshot";
                 RemainAfterExit = true;
-                ExecStart = "${mountFile} ${mountPoint} ${targetFile} ${enableDebugging}";
+                ExecStart = "${mountFile} ${mountPoint} ${targetFile} ${enableDebugging} ${escapeShellArg force}";
                 ExecStop = pkgs.writeShellScript "unbindOrUnlink-${sanitizeName targetFile}" ''
                   set -eu
                   if [[ -L ${mountPoint} ]]; then
@@ -452,7 +464,7 @@ in
             exit $_status
           '';
 
-        mkPersistFile = { file, persistentStoragePath, ... }:
+        mkPersistFile = { file, persistentStoragePath, force, ... }:
           let
             mountPoint = file;
             targetFile = concatPaths [ persistentStoragePath file ];
@@ -460,6 +472,7 @@ in
               mountPoint
               targetFile
               cfg.${persistentStoragePath}.enableDebugging
+              force
             ];
           in
           ''
