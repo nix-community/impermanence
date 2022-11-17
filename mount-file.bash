@@ -19,14 +19,19 @@ mountPoint="$1"
 targetFile="$2"
 debug="$3"
 
+trace() {
+    if (( "$debug" )); then
+      echo "$@"
+    fi
+}
 if (( "$debug" )); then
     set -o xtrace
 fi
 
 if [[ -L "$mountPoint" && $(readlink -f "$mountPoint") == "$targetFile" ]]; then
-    echo "$mountPoint already links to $targetFile, ignoring"
+    trace "$mountPoint already links to $targetFile, ignoring"
 elif mount | grep -F "$mountPoint"' ' >/dev/null && ! mount | grep -F "$mountPoint"/ >/dev/null; then
-    echo "mount already exists at $mountPoint, ignoring"
+    trace "mount already exists at $mountPoint, ignoring"
 elif [[ -e "$mountPoint" ]]; then
     echo "A file already exists at $mountPoint!" >&2
     exit 1
