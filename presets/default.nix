@@ -4,22 +4,9 @@ let
   inherit (lib) optionals foldAttrs optionalAttrs mkOption mkEnableOption;
   inherit (lib.types) bool;
 
-  buildPreset = name: value: let
-    conditional = (value.option or systemConfig.services."${name}".enable) && config.presets.system."${name}";
-  in {
-    files = optionals conditional (value.files or [ ]);
-    directories = optionals conditional (value.directories or [ ]);
-  };
-
-  buildServicesPreset = name: value: let
-    conditional = (value.option or systemConfig.services."${name}".enable) && config.presets.services."${name}";
-  in {
-    files = optionals conditional (value.files or [ ]);
-    directories = optionals conditional (value.directories or [ ]);
-  };
-
-  buildEssentialPreset = name: value: let
-    conditional = (value.option or true) && config.presets.essential."${name}";
+  buildPreset = preset: name: value: let
+    autogenServiceEnabled = if (preset == "essential") then true else systemConfig.services."${name}".enable;
+    conditional = (value.option or autogenServiceEnabled) && config.presets."${preset}"."${name}";
   in {
     files = optionals conditional (value.files or [ ]);
     directories = optionals conditional (value.directories or [ ]);
@@ -32,16 +19,10 @@ let
     description = "Whether to enable ${name} preset.";
   }) attrs;
 
-  systemPresets = builtins.mapAttrs (name: value: buildPreset name value)
-    (optionalAttrs config.presets.system.enable (import ./system.nix { inherit systemConfig lib; }));
+  presetBuilder = preset: builtins.mapAttrs (name: value: buildPreset preset name value)
+    (optionalAttrs config.presets."${preset}".enable (import (../presets + "/${preset}.nix") { inherit systemConfig lib; }));
 
-  servicesPresets = builtins.mapAttrs (name: value: buildServicesPreset name value)
-    (optionalAttrs config.presets.services.enable (import ./services.nix { inherit systemConfig lib; }));
-
-  essentialPresets = builtins.mapAttrs (name: value: buildEssentialPreset name value)
-    (optionalAttrs config.presets.essential.enable (import ./essential.nix { inherit systemConfig lib; }));
-
-  allPresets = essentialPresets // systemPresets // servicesPresets;
+  allPresets = builtins.foldl' (val: col: val // (presetBuilder col)) {} [ "essential" "system" "services" ];
   appliedPresets = foldAttrs (val: col: val ++ col) [] (builtins.attrValues allPresets);
 in
 {
