@@ -47,4 +47,8 @@ in
     option = virtualisation.lxd.enable;
     directories = [ "/var/lib/lxd" ];
   };
+  postgresql.directories = [ services.postgresql.dataDir ];
+  prometheus.directories = [ ("/var/lib/" + services.prometheus.stateDir) ];
+  loki.directories = [ services.loki.dataDir ];
+  grafana.directories = [ services.grafana.dataDir ];
 }
