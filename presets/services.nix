@@ -3,9 +3,18 @@
 let
   inherit (systemConfig) services;
   dataDirGen = svc: { "${svc}".directories = [ services."${svc}".dataDir ]; };
+  stateDirGen = svc: { "${svc}".directories = [ services."${svc}".stateDirGen ]; };
 in
 {
   prometheus.directories = [ ("/var/lib/" + services.prometheus.stateDir) ];
+  prometheus-pushgateway = {
+    option = services.prometheus.pushgateway.enable;
+    directories = [ ("/var/lib/" + services.prometheus.pushgateway.stateDir) ];
+  };
+  prometheus-exporters-py-air-control = {
+    option = services.prometheus.exporters.py-air-control.enable;
+    directories = [ ("/var/lib/" + services.prometheus.exporters.py-air-control.stateDir) ];
+  };
   # bitcoind # Uses attrset of submodules
   # bepasty # Uses attrset of submodules
   # errbot # Uses attrset of submodules
@@ -31,6 +40,18 @@ in
   tor.directories = [ services.tor.settings.DataDirectory ];
   peertube.directories = services.peertube.dataDirs; # is a list already
   # hadoop # Uses attset of submodules
+  # dokuwiki-sites # Uses attrset of submodules
+  # invoiceplane-sites # Uses attrset of submodules
+  charybdis.directories = [ ("/var/lib/" + services.charybdis.statedir) ];
+  # dokuwiki
+  # invoiceplane
+  # thanos
+  journalbeat.directories = [ ("/var/lib/" + services.journalbeat.stateDir) ];
+  factorio.directories = [ ("/var/lib/" + services.factorio.stateDirName) ];
+  wiki-js.directories = [ ("/var/lib/" + services.wiki-js.stateDirectoryName) ];
+  jupyterhub.directories = [ ("/var/lib/" + services.jupyterhub.stateDirectory) ];
+  gotify.directories = [ ("/var/lib/" + services.gotify.stateDirectoryName) ];
+  documize.directories = [ ("/var/lib/" + services.documize.stateDirectoryName) ];
 } // builtins.foldl' (val: col: val // (dataDirGen col)) {} [
   "postgresql"
   "loki"
@@ -120,5 +141,31 @@ in
   "minecraft-server"
   "hbase-standalone"
   "deliantra-server"
-  #"crossfire-server" # It is optional, gotta figure out how
+  #"crossfire-server" # Only if it's non-default
+] // builtins.foldl' (val: col: val // (stateDirGen col)) {} [
+  "unit"
+  "tcsd"
+  "solr"
+  "gogs"
+  "komga"
+  "gitea"
+  "gollum"
+  "galene"
+  "varnish"
+  "unbound"
+  "supybot"
+  "redmine"
+  "pleroma"
+  "portunus"
+  "peerflix"
+  "dolibarr"
+  "octoprint"
+  "moonraker"
+  "jmusicbot"
+  "heartbeat"
+  "writefreely"
+  "privacyidea"
+  "hledger-web"
+  "deliantra-server"
+  "crossfire-server"
 ]
