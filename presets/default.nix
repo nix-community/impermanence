@@ -26,9 +26,8 @@ let
   appliedPresets = foldAttrs (val: col: val ++ col) [] (builtins.attrValues allPresets);
 in
 {
-  files = appliedPresets.files;
-  directories = appliedPresets.directories;
-  services = appliedPresets.services;
+  files = appliedPresets.files or [];
+  directories = appliedPresets.directories or [];
 
   presets = {
     essential = {
