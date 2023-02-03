@@ -5,7 +5,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: cachix/install-nix-action@v12
+      - uses: cachix/install-nix-action@v17
       - name: Check Nix parsing
         run: |
           find . -name "*.nix" -exec nix-instantiate --parse --quiet {} >/dev/null +
@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: cachix/install-nix-action@v12
+      - uses: cachix/install-nix-action@v17
         with:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Check Nix formatting
@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: cachix/install-nix-action@v12
+      - uses: cachix/install-nix-action@v17
         with:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Check shell script formatting
@@ -33,9 +33,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: cachix/install-nix-action@v12
+      - uses: cachix/install-nix-action@v17
         with:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Check for shell script errors
         run: |
           find . -name "*.*sh" -exec nix-shell -p shellcheck --run "shellcheck {}" \;
+  flake_check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@v17
+        with:
+          extra_nix_config: |
+            system-features = big-parallel kvm nixos-test
+      - name: Run flake checks
+        run: |
+          nix flake check -L
