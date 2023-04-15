@@ -399,7 +399,7 @@ in
 
       in
       mkMerge [
-        (mkIf (any (path: cfg.${path}.directories != [ ]) persistentStoragePaths) {
+        (mkIf (any (path: (filter isSymlink cfg.${path}.directories) != [ ]) persistentStoragePaths) {
           # Clean up existing empty directories in the way of links
           cleanEmptyLinkTargets =
             dag.entryBefore
@@ -407,7 +407,8 @@ in
               ''
                 ${concatMapStrings mkLinkCleanupForPath persistentStoragePaths}
               '';
-
+        })
+        (mkIf (any (path: (filter isBindfs cfg.${path}.directories) != [ ]) persistentStoragePaths) {
           createAndMountPersistentStoragePaths =
             dag.entryBefore
               [ "writeBoundary" ]
