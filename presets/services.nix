@@ -145,7 +145,6 @@ in
 ] // builtins.foldl' (val: col: val // (stateDirGen col)) {} [
   "unit"
   "tcsd"
-  "solr"
   "gogs"
   "komga"
   "gitea"
