@@ -5,13 +5,14 @@ let
     types foldl' unique noDepEntry concatMapStrings listToAttrs
     escapeShellArg escapeShellArgs replaceStrings recursiveUpdate all
     filter filterAttrs concatStringsSep concatMapStringsSep isString
-    catAttrs optional literalExpression;
+    catAttrs optional literalExpression mkEnableOption;
 
   inherit (pkgs.callPackage ./lib.nix { }) splitPath dirListToPath
     concatPaths sanitizeName duplicates;
 
   cfg = config.environment.persistence;
   users = config.users.users;
+  systemConfig = config;
   allPersistentStoragePaths = { directories = [ ]; files = [ ]; users = [ ]; }
     // (zipAttrsWith (_name: flatten) (attrValues cfg));
   inherit (allPersistentStoragePaths) files directories;
@@ -322,14 +323,17 @@ in
                       to.
                     '';
                   };
+
+                  presets = (import ./presets { inherit config systemConfig lib; }).presets;
                 };
               config =
                 let
                   allUsers = zipAttrsWith (_name: flatten) (attrValues config.users);
+                  appliedPresets = import ./presets { inherit config systemConfig lib; };
                 in
                 {
-                  files = allUsers.files or [ ];
-                  directories = allUsers.directories or [ ];
+                  files = (allUsers.files or [ ]) ++ appliedPresets.files;
+                  directories = (allUsers.directories or [ ]) ++ appliedPresets.directories;
                 };
             }
           )
