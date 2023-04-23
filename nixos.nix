@@ -686,10 +686,10 @@ in
             '';
         }
         {
-          assertion = duplicates (catAttrs "file" files) == [ ];
+          assertion = duplicates (catAttrs "filePath" files) == [ ];
           message =
             let
-              offenders = duplicates (catAttrs "file" files);
+              offenders = duplicates (catAttrs "filePath" files);
             in
             ''
               environment.persistence:
@@ -699,10 +699,10 @@ in
             '';
         }
         {
-          assertion = duplicates (catAttrs "directory" directories) == [ ];
+          assertion = duplicates (catAttrs "dirPath" directories) == [ ];
           message =
             let
-              offenders = duplicates (catAttrs "directory" directories);
+              offenders = duplicates (catAttrs "dirPath" directories);
             in
             ''
               environment.persistence:
