@@ -1,4 +1,4 @@
-* Impermanence
+#+TITLE: Impermanence
 
   Modules to help you handle persistent state on systems with
   ephemeral root storage.
@@ -13,6 +13,13 @@
   3. want to create links from temporary storage to persistent
      storage, so that specified files and folders persist between
      reboots
+
+
+* Contact
+
+  Join the [[https://matrix.to/#/#impermanence:nixos.org][matrix room]] to chat about the project.
+
+* Usage
 
   There are currently two modules: one for ~NixOS~ and one for ~home-manager~.
 
@@ -53,6 +60,7 @@
           directories = [
             "/var/log"
             "/var/lib/bluetooth"
+            "/var/lib/nixos"
             "/var/lib/systemd/coredump"
             "/etc/NetworkManager/system-connections"
             { directory = "/var/lib/colord"; user = "colord"; group = "colord"; mode = "u=rwx,g=rx,o="; }
@@ -122,10 +130,10 @@
       - ~mode~, the permissions to set for the directory. If the
         directory doesn't already exist in persistent storage, it will
         be created with this mode. Can be either an octal mode
-        (e.g. ~0700~) or a symbolic mode (e.g. ~u=rwx,g=,o=~). This also
-        applies to any parent directories which don't yet exist.
-        Changing this once the directory has been created has no
-        effect.
+        (e.g. ~0700~) or a symbolic mode (e.g. ~u=rwx,g=,o=~). Parent
+        directories that don't yet exist are created with default
+        permissions. Changing this once the directory has been created
+        has no effect.
 
     - ~files~ are all files you want to link or bind to persistent
       storage. A file can be represented either as a string, simply
@@ -274,9 +282,3 @@
    - https://grahamc.com/blog/erase-your-darlings --- [[https://github.com/grahamc/][@grahamc]]'s blog post details
      why one would want to erase their state at every boot, as well as how to
      achieve this using ZFS snapshots.
-
-** About the name
-   : Impermanence, also known as the philosophical problem of change, is a
-   : philosophical concept that is addressed in a variety of religions and
-   : philosophies. In Eastern philosophy it is best known for its role in the
-   : Buddhist three marks of existence. It also is an element of Hinduism.
