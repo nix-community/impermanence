@@ -51,13 +51,13 @@ let
   '';
 
   # Create fileSystems bind mount entry.
-  mkBindMountNameValuePair = { dirPath, persistentStoragePath, ... }: {
+  mkBindMountNameValuePair = { dirPath, persistentStoragePath, hideMount, ... }: {
     name = concatPaths [ "/" dirPath ];
     value = {
       device = concatPaths [ persistentStoragePath dirPath ];
       noCheck = true;
       options = [ "bind" ]
-        ++ optional cfg.${persistentStoragePath}.hideMounts "x-gvfs-hide";
+        ++ optional hideMount "x-gvfs-hide";
       depends = [ persistentStoragePath ];
     };
   };
@@ -89,7 +89,6 @@ in
           submodule (
             { name, config, ... }:
             let
-              persistentStoragePath = name;
               defaultPerms = {
                 mode = "0755";
                 user = "root";
@@ -99,10 +98,10 @@ in
                 options = {
                   persistentStoragePath = mkOption {
                     type = path;
-                    default = persistentStoragePath;
+                    default = cfg.${name}.persistentStoragePath;
                     description = ''
                       The path to persistent storage where the real
-                      file should be stored.
+                      file or directory should be stored.
                     '';
                   };
                   home = mkOption {
@@ -112,6 +111,16 @@ in
                     description = ''
                       The path to the home directory the file is
                       placed within.
+                    '';
+                  };
+                  enableDebugging = mkOption {
+                    type = bool;
+                    default = cfg.${name}.enableDebugging;
+                    internal = true;
+                    description = ''
+                      Enable debug trace output when running
+                      scripts. You only need to enable this if asked
+                      to.
                     '';
                   };
                 };
@@ -151,10 +160,15 @@ in
                       The path to the file.
                     '';
                   };
-                  parentDirectory = dirPermsOpts // {
-                    # See comment in dirOpts below for an explanation.
-                    defaultPerms = mapAttrs (_: x: x // { internal = true; }) dirPermsOpts;
-                  };
+                  parentDirectory =
+                    commonOpts.options //
+                    mapAttrs
+                      (_: x:
+                        if x._type or null == "option" then
+                          x // { internal = true; }
+                        else
+                          x)
+                      dirOpts.options;
                   filePath = mkOption {
                     type = path;
                     internal = true;
@@ -167,6 +181,15 @@ in
                     type = str;
                     description = ''
                       The path to the directory.
+                    '';
+                  };
+                  hideMount = mkOption {
+                    type = bool;
+                    default = cfg.${name}.hideMounts;
+                    example = true;
+                    description = ''
+                      Whether to hide bind mounts from showing up as
+                      mounted drives.
                     '';
                   };
                   # Save the default permissions at the level the
@@ -185,7 +208,12 @@ in
                 commonOpts
                 fileOpts
                 ({ config, ... }: {
-                  parentDirectory = mkDefault (defaultPerms // { inherit defaultPerms; });
+                  parentDirectory = mkDefault (defaultPerms // rec {
+                    directory = dirOf config.file;
+                    dirPath = directory;
+                    inherit (config) persistentStoragePath;
+                    inherit defaultPerms;
+                  });
                   filePath = mkDefault config.file;
                 })
               ];
@@ -206,6 +234,16 @@ in
                     default = true;
                     description = "Whether to enable this persistent storage location.";
                   };
+
+                  persistentStoragePath = mkOption {
+                    type = path;
+                    default = name;
+                    description = ''
+                      The path to persistent storage where the real
+                      files and directories should be stored.
+                    '';
+                  };
+
                   users = mkOption {
                     type = attrsOf (
                       submodule (
@@ -219,28 +257,28 @@ in
                           fileConfig =
                             { config, ... }:
                             {
-                              parentDirectory = mkDefault (userDefaultPerms // { defaultPerms = userDefaultPerms; });
-                              filePath =
-                                if config.home != null then
-                                  concatPaths [ config.home config.file ]
-                                else
-                                  config.file;
+                              parentDirectory = rec {
+                                directory = dirOf config.file;
+                                dirPath = concatPaths [ config.home directory ];
+                                inherit (config) persistentStoragePath home;
+                                defaultPerms = userDefaultPerms;
+                              };
+                              filePath = concatPaths [ config.home config.file ];
                             };
                           userFile = submodule [
                             commonOpts
                             fileOpts
                             { inherit (config) home; }
+                            {
+                              parentDirectory = mkDefault userDefaultPerms;
+                            }
                             fileConfig
                           ];
                           dirConfig =
                             { config, ... }:
                             {
                               defaultPerms = mkDefault userDefaultPerms;
-                              dirPath =
-                                if config.home != null then
-                                  concatPaths [ config.home config.directory ]
-                                else
-                                  config.directory;
+                              dirPath = concatPaths [ config.home config.directory ];
                             };
                           userDir = submodule ([
                             commonOpts
@@ -435,11 +473,10 @@ in
   config = {
     systemd.services =
       let
-        mkPersistFileService = { filePath, persistentStoragePath, ... }:
+        mkPersistFileService = { filePath, persistentStoragePath, enableDebugging, ... }:
           let
             targetFile = escapeShellArg (concatPaths [ persistentStoragePath filePath ]);
             mountPoint = escapeShellArg filePath;
-            enableDebugging = escapeShellArg cfg.${persistentStoragePath}.enableDebugging;
           in
           {
             "persist-${sanitizeName targetFile}" = {
@@ -451,7 +488,7 @@ in
               serviceConfig = {
                 Type = "oneshot";
                 RemainAfterExit = true;
-                ExecStart = "${mountFile} ${mountPoint} ${targetFile} ${enableDebugging}";
+                ExecStart = "${mountFile} ${mountPoint} ${targetFile} ${escapeShellArg enableDebugging}";
                 ExecStop = pkgs.writeShellScript "unbindOrUnlink-${sanitizeName targetFile}" ''
                   set -eu
                   if [[ -L ${mountPoint} ]]; then
@@ -481,7 +518,15 @@ in
           patchShebangs $out
         '';
 
-        mkDirWithPerms = { dirPath, persistentStoragePath, user, group, mode, ... }:
+        mkDirWithPerms =
+          { dirPath
+          , persistentStoragePath
+          , user
+          , group
+          , mode
+          , enableDebugging
+          , ...
+          }:
           let
             args = [
               persistentStoragePath
@@ -489,7 +534,7 @@ in
               user
               group
               mode
-              cfg.${persistentStoragePath}.enableDebugging
+              enableDebugging
             ];
           in
           ''
@@ -501,18 +546,7 @@ in
         dirCreationScript =
           let
             # The parent directories of files.
-            fileDirs = unique (map
-              (f:
-                rec {
-                  directory = dirOf f.file;
-                  dirPath =
-                    if f.home != null then
-                      concatPaths [ f.home directory ]
-                    else
-                      directory;
-                  inherit (f) persistentStoragePath home;
-                } // f.parentDirectory)
-              files);
+            fileDirs = unique (catAttrs "parentDirectory" files);
 
             # All the directories actually listed by the user and the
             # parent directories of listed files.
@@ -543,7 +577,7 @@ in
                       user = dir.user;
                       group = users.${dir.user}.group;
                       inherit defaultPerms;
-                      inherit (dir) persistentStoragePath;
+                      inherit (dir) persistentStoragePath enableDebugging;
                     };
                   in
                   if dir.home != null then
@@ -552,7 +586,8 @@ in
                     else
                       state
                   else
-                    state)
+                    state
+                )
                 [ ]
                 explicitDirs;
 
@@ -572,7 +607,7 @@ in
                       concatPaths [ dir.home path ]
                     else
                       path;
-                  inherit (dir) persistentStoragePath home;
+                  inherit (dir) persistentStoragePath home enableDebugging;
                   inherit (dir.defaultPerms) user group mode;
                 };
                 # Create new directory items for all parent
@@ -600,14 +635,14 @@ in
             exit $_status
           '';
 
-        mkPersistFile = { filePath, persistentStoragePath, ... }:
+        mkPersistFile = { filePath, persistentStoragePath, enableDebugging, ... }:
           let
             mountPoint = filePath;
             targetFile = concatPaths [ persistentStoragePath filePath ];
             args = escapeShellArgs [
               mountPoint
               targetFile
-              cfg.${persistentStoragePath}.enableDebugging
+              enableDebugging
             ];
           in
           ''
