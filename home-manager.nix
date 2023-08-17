@@ -357,7 +357,7 @@ in
 
         mkBindMountsForPath = persistentStorageName:
           concatMapStrings
-            (mkBindMount persistentStoragePath)
+            (mkBindMount persistentStorageName)
             (map getDirPath (filter isBindfs cfg.${persistentStorageName}.directories));
 
         mkUnmount = persistentStorageName: dir:
