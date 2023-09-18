@@ -2,8 +2,12 @@
   outputs = { self }: {
     nixosModules.default = self.nixosModules.impermanence;
     nixosModules.impermanence = import ./nixos.nix;
-    nixosModules.home-manager.impermanence = import ./home-manager.nix;
+
+    homeManagerModules.default = self.homeManagerModules.impermanence;
+    homeManagerModules.impermanence = import ./home-manager.nix;
+
+    # Deprecated
     nixosModule = self.nixosModules.impermanence;
-    hmModule = self.nixosModules.home-manager.impermanence;
+    nixosModules.home-manager.impermanence = self.homeManagerModules.impermanence;
   };
 }
