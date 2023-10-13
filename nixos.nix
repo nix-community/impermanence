@@ -99,6 +99,7 @@ in
                   persistentStoragePath = mkOption {
                     type = path;
                     default = cfg.${name}.persistentStoragePath;
+                    defaultText = "environment.persistence.‹name›.persistentStoragePath";
                     description = ''
                       The path to persistent storage where the real
                       file or directory should be stored.
@@ -116,6 +117,7 @@ in
                   enableDebugging = mkOption {
                     type = bool;
                     default = cfg.${name}.enableDebugging;
+                    defaultText = "environment.persistence.‹name›.enableDebugging";
                     internal = true;
                     description = ''
                       Enable debug trace output when running
@@ -186,6 +188,7 @@ in
                   hideMount = mkOption {
                     type = bool;
                     default = cfg.${name}.hideMounts;
+                    defaultText = "environment.persistence.‹name›.hideMounts";
                     example = true;
                     description = ''
                       Whether to hide bind mounts from showing up as
@@ -238,6 +241,7 @@ in
                   persistentStoragePath = mkOption {
                     type = path;
                     default = name;
+                    defaultText = "‹name›";
                     description = ''
                       The path to persistent storage where the real
                       files and directories should be stored.
