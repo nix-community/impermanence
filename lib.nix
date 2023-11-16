@@ -56,9 +56,7 @@ let
       parents;
 
   sanitizeName = name:
-    replaceStrings
-      [ "." ] [ "" ]
-      (sanitizeDerivationName (removePrefix "/" name));
+      sanitizeDerivationName (removePrefix "/" name);
 
   duplicates = list:
     let
