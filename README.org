@@ -1,25 +1,162 @@
 #+TITLE: Impermanence
 
-  Modules to help you handle persistent state on systems with
-  ephemeral root storage.
+  Lets you choose what files and directories you want to keep between
+  reboots - the rest are thrown away.
 
-  The premises of the modules are that you
+  Why would you want this?
 
-  1. have a root filesystem which somehow gets wiped on
-     reboot - e.g. using tmpfs on /
+  - It keeps your system clean by default.
 
-  2. have a mount point where state is kept between reboots
+  - It forces you to declare settings you want to keep.
 
-  3. want to create links from temporary storage to persistent
-     storage, so that specified files and folders persist between
-     reboots
+  - It lets you experiment with new software without cluttering up
+    your system.
 
+  There are a few different things to set up for this to work:
+
+  - A root filesystem which somehow gets wiped on reboot. There are a
+    few ways to achieve this. See the [[*System setup][System setup]] section for more info.
+
+  - At least one mounted volume where the files and directories you
+    want to keep are stored permanently.
+
+  - At least one of the modules in this repository, which take care of
+    linking or bind mounting files between the persistent storage
+    mount point and the root file system. See the [[*Module usage][Module usage]] section
+    for more info.
 
 * Contact
 
   Join the [[https://matrix.to/#/#impermanence:nixos.org][matrix room]] to chat about the project.
 
-* Usage
+* System setup
+
+  There are many ways to wipe your root partition between boots. This
+  section lists a few common ways to accomplish this, but is by no
+  means an exhaustive list.
+
+*** tmpfs
+
+    The easiest method is to use the a tmpfs filesystem for the
+    root. This is the easiest way to set up impermanence on systems
+    which currently use a traditional filesystem (ext4, xfs, etc) as
+    the root filesystem, since you don't have to repartition.
+
+    All data stored in tmpfs only resides in system memory, not on
+    disk. This automatically takes care of cleaning up between boots,
+    but also comes with some pretty significant drawbacks:
+
+    - Downloading big files or trying programs that generate large
+      amounts of data can easily result in either an out-of-memory or
+      disk-full scenario.
+
+    - If the system crashes or loses power before you've had a chance
+      to move files you want to keep to persistent storage, they're
+      gone forever.
+
+    Using tmpfs as the root filesystem, the filesystem setup would
+    look something like this:
+
+    #+begin_src nix
+      {
+        fileSystems."/" = {
+          device = "none";
+          fsType = "tmpfs";
+          options = [ "defaults" "size=25%" "mode=755" ];
+        };
+
+        fileSystems."/persistent" = {
+          device = "/dev/root_vg/root";
+          neededForBoot = true;
+          fsType = "btrfs";
+          options = [ "subvol=persistent" ];
+        };
+
+        fileSystems."/nix" = {
+          device = "/dev/root_vg/root";
+          fsType = "btrfs";
+          options = [ "subvol=nix" ];
+        };
+
+        fileSystems."/boot" = {
+          device = "/dev/disk/by-uuid/XXXX-XXXX";
+          fsType = "vfat";
+        };
+      }
+    #+end_src
+
+    where the ~size~ option determines how much system memory is allowed
+    to be used by the filesystem.
+
+*** BTRFS subvolumes
+
+    A more advanced solution which doesn't have the same drawbacks as
+    using tmpfs is to use a regular filesystem, but clean it up
+    between boots. A relatively easy way to do this is to use BTRFS
+    and create a new subvolume to use as root on boot. This also
+    allows you to keep a number of old roots around, in case of
+    crashes, power outages or other accidents.
+
+    A setup which would remove automatically remove roots that are
+    older than 30 days could look like this:
+
+    #+begin_src nix
+      {
+        fileSystems."/" = {
+          device = "/dev/root_vg/root";
+          fsType = "btrfs";
+          options = [ "subvol=root" ];
+        };
+
+        boot.initrd.postDeviceCommands = lib.mkAfter ''
+          mkdir /btrfs_tmp
+          mount /dev/root_vg/root /btrfs_tmp
+          if [[ -e /btrfs_tmp/root ]]; then
+              mkdir -p /btrfs_tmp/old_roots
+              timestamp=$(date --date="@$(stat -c %Y /btrfs_tmp/root)" "+%Y-%m-%-d_%H:%M:%S")
+              mv /btrfs_tmp/root "/btrfs_tmp/old_roots/$timestamp"
+          fi
+
+          delete_subvolume_recursively() {
+              IFS=$'\n'
+              for i in $(btrfs subvolume list -o "$1" | cut -f 9- -d ' '); do
+                  delete_subvolume_recursively "/btrfs_tmp/$i"
+              done
+              btrfs subvolume delete "$1"
+          }
+
+          for i in $(find /btrfs_tmp/old_roots/ -maxdepth 1 -mtime +30); do
+              delete_subvolume_recursively "$i"
+          done
+
+          btrfs subvolume create /btrfs_tmp/root
+          umount /btrfs_tmp
+        '';
+
+        fileSystems."/persistent" = {
+          device = "/dev/root_vg/root";
+          neededForBoot = true;
+          fsType = "btrfs";
+          options = [ "subvol=persistent" ];
+        };
+
+        fileSystems."/nix" = {
+          device = "/dev/root_vg/root";
+          fsType = "btrfs";
+          options = [ "subvol=nix" ];
+        };
+
+        fileSystems."/boot" = {
+          device = "/dev/disk/by-uuid/XXXX-XXXX";
+          fsType = "vfat";
+        };
+      }
+    #+end_src
+
+    This assumes the BTRFS filesystem can be found in an LVM volume
+    group called ~root_vg~. Adjust the path as necessary.
+
+* Module usage
 
   There are currently two modules: one for ~NixOS~ and one for ~home-manager~.
 
@@ -30,6 +167,27 @@
     #+begin_src nix
       {
         imports = [ /path/to/impermanence/nixos.nix ];
+      }
+    #+end_src
+
+    or use the provided ~nixosModules.impermanence~ flake output:
+
+    #+begin_src nix
+      {
+        inputs = {
+          impermanence.url = "github:nix-community/impermanence";
+        };
+
+        outputs = { self, nixpkgs, impermanence, ... }:
+          {
+            nixosConfigurations.sythe = nixpkgs.lib.nixosSystem {
+              system = "x86_64-linux";
+              modules = [
+                impermanence.nixosModules.impermanence
+                ./machines/sythe/configuration.nix
+              ];
+            };
+          };
       }
     #+end_src
 
@@ -53,7 +211,7 @@
           ];
           files = [
             "/etc/machine-id"
-            { file = "/etc/nix/id_rsa"; parentDirectory = { mode = "u=rwx,g=,o="; }; }
+            { file = "/var/keys/secret_file"; parentDirectory = { mode = "u=rwx,g=,o="; }; }
           ];
           users.talyz = {
             directories = [
