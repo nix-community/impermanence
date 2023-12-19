@@ -1,4 +1,4 @@
-{ pkgs, config, lib, ... }:
+{ pkgs, config, lib, utils, ... }:
 
 let
   inherit (lib)
@@ -31,11 +31,14 @@ let
     mapAttrs
     ;
 
+  inherit (utils)
+    escapeSystemdPath
+    ;
+
   inherit (pkgs.callPackage ./lib.nix { })
     splitPath
     dirListToPath
     concatPaths
-    sanitizeName
     duplicates
     parentsOf
     ;
@@ -483,7 +486,7 @@ in
             mountPoint = escapeShellArg filePath;
           in
           {
-            "persist-${sanitizeName targetFile}" = {
+            "persist-${escapeSystemdPath targetFile}" = {
               description = "Bind mount or link ${targetFile} to ${mountPoint}";
               wantedBy = [ "local-fs.target" ];
               before = [ "local-fs.target" ];
@@ -493,7 +496,7 @@ in
                 Type = "oneshot";
                 RemainAfterExit = true;
                 ExecStart = "${mountFile} ${mountPoint} ${targetFile} ${escapeShellArg enableDebugging}";
-                ExecStop = pkgs.writeShellScript "unbindOrUnlink-${sanitizeName targetFile}" ''
+                ExecStop = pkgs.writeShellScript "unbindOrUnlink-${escapeSystemdPath targetFile}" ''
                   set -eu
                   if [[ -L ${mountPoint} ]]; then
                       rm ${mountPoint}
