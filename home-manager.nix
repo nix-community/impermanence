@@ -1,4 +1,4 @@
-{ pkgs, config, lib, utils, ... }:
+{ pkgs, config, lib, ... }:
 
 with lib;
 let
@@ -11,14 +11,11 @@ let
   isBindfs = v: (getDirMethod v) == "bindfs";
   isSymlink = v: (getDirMethod v) == "symlink";
 
-  inherit (utils)
-    escapeSystemdPath
-    ;
-
   inherit (pkgs.callPackage ./lib.nix { })
     splitPath
     dirListToPath
     concatPaths
+    sanitizeName
     ;
 
   mount = "${pkgs.util-linux}/bin/mount";
@@ -205,7 +202,7 @@ in
       let
         link = file:
           pkgs.runCommand
-            "${file}"
+            "${sanitizeName file}"
             { }
             "ln -s '${file}' $out";
 
@@ -238,7 +235,7 @@ in
                 dir;
             targetDir = escapeShellArg (concatPaths [ cfg.${persistentStorageName}.persistentStoragePath dir ]);
             mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
-            name = "bindMount-${escapeSystemdPath targetDir}";
+            name = "bindMount-${sanitizeName targetDir}";
             bindfsOptions = concatStringsSep "," (
               optional (!cfg.${persistentStorageName}.allowOther) "no-allow-other"
               ++ optional (versionAtLeast pkgs.bindfs.version "1.14.9") "fsname=${targetDir}"
@@ -345,7 +342,7 @@ in
                     if ! ${mount} | grep -F ${mountPoint}' ' | grep -F ${targetDir}' ' >/dev/null; then
                         # The target directory changed, so we need to remount
                         echo "remounting ${mountPoint}"
-                        ${systemctl} --user stop bindMount-${escapeSystemdPath targetDir}
+                        ${systemctl} --user stop bindMount-${sanitizeName targetDir}
                         ${bindfs} ${targetDir} ${mountPoint}
                         mountedPaths[${mountPoint}]=1
                     fi
