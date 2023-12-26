@@ -37,7 +37,7 @@
 
 *** tmpfs
 
-    The easiest method is to use the a tmpfs filesystem for the
+    The easiest method is to use a tmpfs filesystem for the
     root. This is the easiest way to set up impermanence on systems
     which currently use a traditional filesystem (ext4, xfs, etc) as
     the root filesystem, since you don't have to repartition.
