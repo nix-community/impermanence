@@ -15,14 +15,14 @@
   There are a few different things to set up for this to work:
 
   - A root filesystem which somehow gets wiped on reboot. There are a
-    few ways to achieve this. See the [[*System setup][System setup]] section for more info.
+    few ways to achieve this. See the [[#system-setup][System setup]] section for more info.
 
   - At least one mounted volume where the files and directories you
     want to keep are stored permanently.
 
   - At least one of the modules in this repository, which take care of
     linking or bind mounting files between the persistent storage
-    mount point and the root file system. See the [[*Module usage][Module usage]] section
+    mount point and the root file system. See the [[#module-usage][Module usage]] section
     for more info.
 
 * Contact
