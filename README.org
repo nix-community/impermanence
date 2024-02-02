@@ -426,3 +426,6 @@
    - https://grahamc.com/blog/erase-your-darlings --- [[https://github.com/grahamc/][@grahamc]]'s blog post details
      why one would want to erase their state at every boot, as well as how to
      achieve this using ZFS snapshots.
+   - https://willbush.dev/blog/impermanent-nixos/ --- [[https://github.com/willbush/][@willbush]]'s blog post
+     provides a detailed NixOS-on-tmpfs guide with optional LUKS encryption, and
+     utilizing nix flakes for an opinionated install.
