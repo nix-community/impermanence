@@ -255,7 +255,7 @@ in
 
                   createPersistentStoragePath = mkOption {
                     type = bool;
-                    default = false;
+                    default = true;
                     description = ''
                       If set and persistentStoragePath does not exist then the directory
                       persistentStoragePath will be created.  The owner of the directory
