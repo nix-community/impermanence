@@ -665,8 +665,27 @@ in
           '';
       in
       {
-        "createPersistentStorageDirs" = {
+        "createPersistentStoragePaths" = {
           deps = [ "users" "groups" ];
+          text =
+            lib.pipe config.environment.persistence [
+              (lib.mapAttrsToList (_: storage: storage.persistentStoragePath))
+              (lib.sort (a: b: lib.hasPrefix a b))
+              # trailing newline is included in indent string
+              (lib.concatMapStrings (s:
+                let
+                  dir = lib.escapeShellArg s;
+                in
+                ''
+                  if [ ! -e ${dir} ]; then
+                    printf 'Creating persistentStoragePath: %s\n' ${dir}
+                    mkdir -p ${dir}
+                  fi
+              ''))
+            ];
+        };
+        "createPersistentStorageDirs" = {
+          deps = [ "users" "groups" "createPersistentStoragePaths" ];
           text = "${dirCreationScript}";
         };
         "persist-files" = {
