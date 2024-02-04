@@ -248,6 +248,18 @@ in
                     description = ''
                       The path to persistent storage where the real
                       files and directories should be stored.
+
+                      This directory will be created if createPersistentStoragePath is set.
+                    '';
+                  };
+
+                  createPersistentStoragePath = mkOption {
+                    type = bool;
+                    default = false;
+                    description = ''
+                      If set and persistentStoragePath does not exist then the directory
+                      persistentStoragePath will be created.  The owner of the directory
+                      will be root.
                     '';
                   };
 
@@ -669,6 +681,7 @@ in
           deps = [ "users" "groups" ];
           text =
             lib.pipe config.environment.persistence [
+              (lib.filterAttrs (_: storage: storage.createPersistentStoragePath))
               (lib.mapAttrsToList (_: storage: storage.persistentStoragePath))
               (lib.sort (a: b: lib.hasPrefix a b))
               # trailing newline is included in indent string
