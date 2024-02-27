@@ -195,6 +195,17 @@
     attribute set of submodules, where the attribute name is the path
     to persistent storage.
 
+    The impermanence module is enabled by default. It can be globally disabled
+    when imported, removing all side-effects (such as additional activation
+    scripts). This can be helpful when using a single configuration for multiple
+    systems which imports the module globally. To disable impermanence, use:
+
+    #+begin_src nix
+      {
+        boot.impermanence.enable = false;
+      }
+    #+end_src
+
     Usage is shown best with an example:
 
     #+begin_src nix
@@ -347,6 +358,18 @@
     This adds the ~home.persistence~ option, which is an attribute set
     of submodules, where the attribute name is the path to persistent
     storage.
+
+    The home-manager module is enabled by default. It can be globally disabled
+    when imported, removing all side-effects (such as additional activation
+    scripts). This can be helpful when using a single configuration for multiple
+    systems which imports the module globally. To disable the home-manager
+    module, use:
+
+    #+begin_src nix
+      {
+        home.impermanence.enable = false;
+      }
+    #+end_src
 
     Usage is shown best with an example:
 
