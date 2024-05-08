@@ -238,7 +238,7 @@ in
         mkLinksToPersistentStorage = persistentStorageName:
           listToAttrs (map
             (mkLinkNameValuePair persistentStorageName)
-            (map (v: v.directory) (cfg.${persistentStorageName}.files ++
+            (cfg.${persistentStorageName}.files ++ (map (v: v.directory)
               (filter (v: v.method == "symlink") cfg.${persistentStorageName}.directories)))
           );
       in
@@ -477,7 +477,7 @@ in
                     (targetFilePath: ''
                       mkdir -p ${escapeShellArg (concatPaths [ cfg.${persistentStorageName}.persistentStoragePath (dirOf targetFilePath) ])}
                     '')
-                    (map (v: v.directory) (cfg.${persistentStorageName}.files ++ (filter (v: v.method == "symlink") cfg.${persistentStorageName}.directories))))
+                    (cfg.${persistentStorageName}.files ++ (map (v: v.directory) (filter (v: v.method == "symlink") cfg.${persistentStorageName}.directories))))
                 persistentStorageNames);
         })
       ];
