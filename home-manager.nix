@@ -62,8 +62,14 @@ in
                 default = "bindfs";
                 description = ''
                   The linking method that should be used for directories.
-                  bindfs is the default and works for most use cases, however
-                  some programs may behave better with symlinks.
+
+                  - bindfs is very transparent, and thus used as a safe
+                  default. It has, however, a significant performance impact in
+                  IO-heavy situations.
+
+                  - symlinks have great performance but may be treated
+                  specially by some programs that may e.g. generate
+                  errors/warnings, or replace them.
 
                   This can be overridden on a per entry basis.
                 '';
@@ -82,8 +88,9 @@ in
                         default = config.defaultDirectoryMethod;
                         description = ''
                           The linking method to be used for this specific
-                          directory entry. Defaults to
-                          <literal>defaultDirectoryMethod</literal>.
+                          directory entry. See
+                          <literal>defaultDirectoryMethod</literal> for more
+                          information on the tradeoffs.
                         '';
                       };
                     };
