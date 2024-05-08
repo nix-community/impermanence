@@ -6,10 +6,9 @@ let
 
   persistentStorageNames = (filter (path: cfg.${path}.enable) (attrNames cfg));
 
-  getDirPath = v: if isString v then v else v.directory;
-  getDirMethod = v: v.method or "bindfs";
-  isBindfs = v: (getDirMethod v) == "bindfs";
-  isSymlink = v: (getDirMethod v) == "symlink";
+  getDirPath = v: v.directory;
+  isBindfs = v: v.method == "bindfs";
+  isSymlink = v: v.method == "symlink";
 
   inherit (pkgs.callPackage ./lib.nix { })
     splitPath
@@ -63,25 +62,26 @@ in
               };
 
               directories = mkOption {
-                type = with types; listOf (either str (submodule {
-                  options = {
-                    directory = mkOption {
-                      type = str;
-                      default = null;
-                      description = "The directory path to be linked.";
+                type = types.listOf (
+                  types.coercedTo types.str (directory: { inherit directory; }) (submodule {
+                    options = {
+                      directory = mkOption {
+                        type = str;
+                        description = "The directory path to be linked.";
+                      };
+                      method = mkOption {
+                        type = types.enum [ "bindfs" "symlink" ];
+                        default = "bindfs";
+                        description = ''
+                          The linking method that should be used for this
+                          directory. bindfs is the default and works for most use
+                          cases, however some programs may behave better with
+                          symlinks.
+                        '';
+                      };
                     };
-                    method = mkOption {
-                      type = types.enum [ "bindfs" "symlink" ];
-                      default = "bindfs";
-                      description = ''
-                        The linking method that should be used for this
-                        directory. bindfs is the default and works for most use
-                        cases, however some programs may behave better with
-                        symlinks.
-                      '';
-                    };
-                  };
-                }));
+                  })
+                );
                 default = [ ];
                 example = [
                   "Downloads"
