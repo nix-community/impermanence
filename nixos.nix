@@ -22,11 +22,9 @@ let
     filterAttrs
     concatStringsSep
     concatMapStringsSep
-    isString
     catAttrs
     optional
     literalExpression
-    optionalString
     elem
     mapAttrs
     ;
@@ -36,8 +34,6 @@ let
     ;
 
   inherit (pkgs.callPackage ./lib.nix { })
-    splitPath
-    dirListToPath
     concatPaths
     duplicates
     parentsOf
@@ -83,7 +79,6 @@ in
             submodule
             nullOr
             path
-            either
             str
             coercedTo
             ;
