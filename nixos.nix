@@ -8,6 +8,7 @@ let
     flatten
     mkOption
     mkDefault
+    mkIf
     mapAttrsToList
     types
     foldl'
@@ -41,8 +42,7 @@ let
 
   cfg = config.environment.persistence;
   users = config.users.users;
-  allPersistentStoragePaths = { directories = [ ]; files = [ ]; users = [ ]; }
-    // (zipAttrsWith (_name: flatten) (filter (v: v.enable) (attrValues cfg)));
+  allPersistentStoragePaths = zipAttrsWith (_name: flatten) (filter (v: v.enable) (attrValues cfg));
   inherit (allPersistentStoragePaths) files directories;
   mountFile = pkgs.runCommand "impermanence-mount-file" { buildInputs = [ pkgs.bash ]; } ''
     cp ${./mount-file.bash} $out
@@ -472,7 +472,7 @@ in
     virtualisation.fileSystems = mkOption { };
   };
 
-  config = {
+  config = mkIf (allPersistentStoragePaths != { }) {
     systemd.services =
       let
         mkPersistFileService = { filePath, persistentStoragePath, enableDebugging, ... }:
