@@ -245,8 +245,7 @@
 
     - ~enable~ determines whether the persistent storage location should
       be enabled or not. Useful when sharing configurations between
-      systems with and without an impermanence setup. Defaults to
-      ~true~.
+      systems with and without impermanence setups. Defaults to ~true~.
 
     - ~hideMounts~ allows you to specify whether to hide the
       bind mounts from showing up as mounted drives in the file
