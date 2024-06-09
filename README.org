@@ -200,6 +200,7 @@
     #+begin_src nix
       {
         environment.persistence."/persistent" = {
+          enable = true;  # NB: Defaults to true, not needed
           hideMounts = true;
           directories = [
             "/var/log"
@@ -241,6 +242,16 @@
       locations. If you, for example, have one location you back up
       and one you don't, you can use both by defining two separate
       attributes under ~environment.persistence~.
+
+    - ~enable~ determines whether the persistent storage location should
+      be enabled or not. Useful when sharing configurations between
+      systems with and without an impermanence setup. Defaults to
+      ~true~.
+
+    - ~hideMounts~ allows you to specify whether to hide the
+      bind mounts from showing up as mounted drives in the file
+      manager. If enabled, it sets the mount option ~x-gvfs-hide~
+      on all the bind mounts.
 
     - ~directories~ are all directories you want to bind mount to
       persistent storage. A directory can be represented either as a
@@ -303,11 +314,6 @@
 
       If the file exists in persistent storage, it will be bind
       mounted to the target path; otherwise it will be symlinked.
-
-    - ~hideMounts~ allows you to specify whether to hide the
-      bind mounts from showing up as mounted drives in the file
-      manager. If enabled, it sets the mount option ~x-gvfs-hide~
-      on all the bind mounts.
 
     - ~users.talyz~ handles files and directories in ~talyz~'s home
       directory
