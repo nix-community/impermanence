@@ -506,9 +506,9 @@ in
       in
       foldl' recursiveUpdate { } (map mkPersistFileService files);
 
-    fileSystems = bindMounts;
+    fileSystems = mkIf (directories != [ ]) bindMounts;
     # So the mounts still make it into a VM built from `system.build.vm`
-    virtualisation.fileSystems = bindMounts;
+    virtualisation.fileSystems = mkIf (directories != [ ]) bindMounts;
 
     system.activationScripts =
       let
