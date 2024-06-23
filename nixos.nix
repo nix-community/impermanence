@@ -682,6 +682,9 @@ in
         homeDirOffenders =
           filterAttrs
             (n: v: (v.home != config.users.users.${n}.home));
+        usersWithoutUid = attrNames (filterAttrs (n: u: u.uid == null) config.users.users);
+        groupsWithoutGid = attrNames (filterAttrs (n: g: g.gid == null) config.users.groups);
+        varLibNixosPersisted = elem "/var/lib/nixos" (catAttrs "dirPath" directories);
       in
       [
         {
@@ -752,6 +755,18 @@ in
                   times:
                     ${concatStringsSep "\n      " offenders}
             '';
+        }
+        {
+          assertion = varLibNixosPersisted || (usersWithoutUid == [ ] && groupsWithoutGid == [ ]);
+          message = ''
+            environment.persistence:
+                Either "/var/lib/nixos" has to be persisted, or all users and
+                groups must have a uid/gid specified. The following users are
+                missing a uid:
+                  ${concatStringsSep "\n      " usersWithoutUid}
+                The following groups are missing a gid:
+                  ${concatStringsSep "\n      " groupsWithoutGid}
+          '';
         }
       ];
   };
