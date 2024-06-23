@@ -46,14 +46,16 @@ fi
 # check that the source exists and warn the user if it doesn't, then
 # create them with the specified permissions
 realSource="$(realpath -m "$sourceBase$target")"
-if [[ ! -d "$realSource" ]]; then
+if [[ ! -d $realSource ]]; then
     printf "Warning: Source directory '%s' does not exist; it will be created for you with the following permissions: owner: '%s:%s', mode: '%s'.\n" "$realSource" "$user" "$group" "$mode"
     mkdir --mode="$mode" "$realSource"
     chown "$user:$group" "$realSource"
 fi
 
-[[ -d "$target" ]] || mkdir "$target"
+if [[ $sourceBase ]]; then
+    [[ -d $target ]] || mkdir "$target"
 
-# synchronize perms between source and target
-chown --reference="$realSource" "$target"
-chmod --reference="$realSource" "$target"
+    # synchronize perms between source and target
+    chown --reference="$realSource" "$target"
+    chmod --reference="$realSource" "$target"
+fi
