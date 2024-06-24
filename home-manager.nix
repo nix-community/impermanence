@@ -2,8 +2,14 @@
 
 with lib;
 let
-  cfg = config.home.persistence;
+  inherit (pkgs.callPackage ./lib.nix { })
+    splitPath
+    dirListToPath
+    concatPaths
+    sanitizeName
+    ;
 
+  cfg = config.home.persistence;
   persistentStorageNames = attrNames cfg;
 
   getDirPath = v: if isString v then v else v.directory;
@@ -11,12 +17,11 @@ let
   isBindfs = v: (getDirMethod v) == "bindfs";
   isSymlink = v: (getDirMethod v) == "symlink";
 
-  inherit (pkgs.callPackage ./lib.nix { })
-    splitPath
-    dirListToPath
-    concatPaths
-    sanitizeName
-    ;
+  formatPath = persistentStorageName: path:
+    if cfg.${persistentStorageName}.removePrefixDirectory then
+      dirListToPath (tail (splitPath [ path ]))
+    else
+      path;
 
   mount = "${pkgs.util-linux}/bin/mount";
   unmountScript = mountPoint: tries: sleep: ''
@@ -40,7 +45,6 @@ let
 in
 {
   options = {
-
     home.persistence = mkOption {
       default = { };
       type = with types; attrsOf (
@@ -194,7 +198,6 @@ in
         }
       '';
     };
-
   };
 
   config = {
@@ -207,11 +210,7 @@ in
             "ln -s '${file}' $out";
 
         mkLinkNameValuePair = persistentStorageName: fileOrDir: {
-          name =
-            if cfg.${persistentStorageName}.removePrefixDirectory then
-              dirListToPath (tail (splitPath [ fileOrDir ]))
-            else
-              fileOrDir;
+          name = formatPath persistentStorageName fileOrDir;
           value = { source = link (concatPaths [ cfg.${persistentStorageName}.persistentStoragePath fileOrDir ]); };
         };
 
@@ -228,11 +227,7 @@ in
       let
         mkBindMountService = persistentStorageName: dir:
           let
-            mountDir =
-              if cfg.${persistentStorageName}.removePrefixDirectory then
-                dirListToPath (tail (splitPath [ dir ]))
-              else
-                dir;
+            mountDir = formatPath persistentStorageName dir;
             targetDir = escapeShellArg (concatPaths [ cfg.${persistentStorageName}.persistentStoragePath dir ]);
             mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
             name = "bindMount-${sanitizeName targetDir}";
@@ -318,11 +313,7 @@ in
 
         mkBindMount = persistentStorageName: dir:
           let
-            mountDir =
-              if cfg.${persistentStorageName}.removePrefixDirectory then
-                dirListToPath (tail (splitPath [ dir ]))
-              else
-                dir;
+            mountDir = formatPath persistentStorageName dir;
             targetDir = escapeShellArg (concatPaths [ cfg.${persistentStorageName}.persistentStoragePath dir ]);
             mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
             bindfsOptions = concatStringsSep "," (
@@ -362,11 +353,7 @@ in
 
         mkUnmount = persistentStorageName: dir:
           let
-            mountDir =
-              if cfg.${persistentStorageName}.removePrefixDirectory then
-                dirListToPath (tail (splitPath [ dir ]))
-              else
-                dir;
+            mountDir = formatPath persistentStorageName dir;
             mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
           in
           ''
@@ -382,11 +369,7 @@ in
 
         mkLinkCleanup = persistentStorageName: dir:
           let
-            mountDir =
-              if cfg.${persistentStorageName}.removePrefixDirectory then
-                dirListToPath (tail (splitPath [ dir ]))
-              else
-                dir;
+            mountDir = formatPath persistentStorageName dir;
             mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
           in
           ''
@@ -462,5 +445,4 @@ in
         })
       ];
   };
-
 }
