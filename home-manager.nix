@@ -7,21 +7,48 @@ let
     dirListToPath
     concatPaths
     sanitizeName
+    parentsOf
     ;
 
   cfg = config.home.persistence;
-  persistentStorageNames = attrNames cfg;
 
   getDirPath = v: if isString v then v else v.directory;
   getDirMethod = v: v.method or "bindfs";
-  isBindfs = v: (getDirMethod v) == "bindfs";
-  isSymlink = v: (getDirMethod v) == "symlink";
 
-  formatPath = persistentStorageName: path:
-    if cfg.${persistentStorageName}.removePrefixDirectory then
-      dirListToPath (tail (splitPath [ path ]))
-    else
-      path;
+  formatPath = persistentStorage: path:
+    if persistentStorage.removePrefixDirectory then dirListToPath (tail (splitPath [ path ]))
+    else path;
+
+  collectPersistenceOptionsForStorage = persistentStorage:
+    let
+      dirs = map
+        (dir: {
+          persistence = persistentStorage.persistentStoragePath;
+          target = formatPath persistentStorage (getDirPath dir);
+          type = "directory";
+          method = getDirMethod dir;
+          allowOther = persistentStorage.allowOther;
+        })
+        persistentStorage.directories;
+
+      files = map
+        (file: {
+          persistence = persistentStorage.persistentStoragePath;
+          target = formatPath persistentStorage file;
+          type = "file";
+          method = "symlink";
+          allowOther = persistentStorage.allowOther;
+        })
+        persistentStorage.files;
+    in
+    dirs ++ files;
+
+  persistenceOptions = sort
+    (a: b: a.target < b.target)
+    (concatMap collectPersistenceOptionsForStorage (attrValues cfg));
+
+  symlinkOptions = filter (opt: opt.method == "symlink") persistenceOptions;
+  bindOptions = filter (opt: opt.method == "bindfs") persistenceOptions;
 
   mount = "${pkgs.util-linux}/bin/mount";
   unmountScript = mountPoint: tries: sleep: ''
@@ -209,34 +236,41 @@ in
             { }
             "ln -s '${file}' $out";
 
-        mkLinkNameValuePair = persistentStorageName: fileOrDir: {
-          name = formatPath persistentStorageName fileOrDir;
-          value = { source = link (concatPaths [ cfg.${persistentStorageName}.persistentStoragePath fileOrDir ]); };
+        mkLinkNameValuePair = opt: {
+          name = opt.target;
+          value = { source = link (concatPaths [ opt.persistence opt.target ]); };
         };
-
-        mkLinksToPersistentStorage = persistentStorageName:
-          listToAttrs (map
-            (mkLinkNameValuePair persistentStorageName)
-            (map getDirPath (cfg.${persistentStorageName}.files ++
-              (filter isSymlink cfg.${persistentStorageName}.directories)))
-          );
       in
-      foldl' recursiveUpdate { } (map mkLinksToPersistentStorage persistentStorageNames);
+      listToAttrs (map mkLinkNameValuePair symlinkOptions);
 
     systemd.user.services =
       let
-        mkBindMountService = persistentStorageName: dir:
+        mkTargetDir = opt: escapeShellArg (concatPaths [ opt.persistence opt.target ]);
+        mkMountPoint = opt: escapeShellArg (concatPaths [ config.home.homeDirectory opt.target ]);
+        mkName = opt: "bindMount-${sanitizeName (mkTargetDir opt)}";
+
+        mkBindMountService = opt:
           let
-            mountDir = formatPath persistentStorageName dir;
-            targetDir = escapeShellArg (concatPaths [ cfg.${persistentStorageName}.persistentStoragePath dir ]);
-            mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
-            name = "bindMount-${sanitizeName targetDir}";
+            name = mkName opt;
+            targetDir = mkTargetDir opt;
+            mountPoint = mkMountPoint opt;
+
             bindfsOptions = concatStringsSep "," (
-              optional (!cfg.${persistentStorageName}.allowOther) "no-allow-other"
+              optional (!opt.allowOther) "no-allow-other"
               ++ optional (versionAtLeast pkgs.bindfs.version "1.14.9") "fsname=${targetDir}"
             );
             bindfsOptionFlag = optionalString (bindfsOptions != "") (" -o " + bindfsOptions);
             bindfs = "bindfs" + bindfsOptionFlag;
+
+            parentPaths = parentsOf opt.target;
+            parents = filter
+              (parent: parent != null)
+              (map
+                (path: lists.findFirst (opt: opt.target == path) null persistenceOptions)
+                parentPaths);
+
+            dependencies = map (dep: "${mkName dep}.service") parents;
+
             startScript = pkgs.writeShellScript name ''
               set -eu
               if ! mount | grep -F ${mountPoint}' ' && ! mount | grep -F ${mountPoint}/; then
@@ -247,6 +281,7 @@ in
                   exit 1
               fi
             '';
+
             stopScript = pkgs.writeShellScript "unmount-${name}" ''
               set -eu
               ${unmountScript mountPoint 6 5}
@@ -273,6 +308,9 @@ in
                   "sockets.target"
                   "timers.target"
                 ];
+
+                Wants = dependencies;
+                After = dependencies;
               };
 
               Install.WantedBy = [ "paths.target" ];
@@ -285,17 +323,8 @@ in
               };
             };
           };
-
-        mkBindMountServicesForPath = persistentStorageName:
-          listToAttrs (map
-            (mkBindMountService persistentStorageName)
-            (map getDirPath (filter isBindfs cfg.${persistentStorageName}.directories))
-          );
       in
-      builtins.foldl'
-        recursiveUpdate
-        { }
-        (map mkBindMountServicesForPath persistentStorageNames);
+      listToAttrs (map mkBindMountService bindOptions);
 
     home.activation =
       let
@@ -311,13 +340,13 @@ in
           else
             "reloadSystemd";
 
-        mkBindMount = persistentStorageName: dir:
+        mkBindMount = opt:
           let
-            mountDir = formatPath persistentStorageName dir;
-            targetDir = escapeShellArg (concatPaths [ cfg.${persistentStorageName}.persistentStoragePath dir ]);
+            mountDir = opt.target;
+            targetDir = escapeShellArg (concatPaths [ opt.persistence opt.target ]);
             mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
             bindfsOptions = concatStringsSep "," (
-              optional (!cfg.${persistentStorageName}.allowOther) "no-allow-other"
+              optional (!opt.allowOther) "no-allow-other"
               ++ optional (versionAtLeast pkgs.bindfs.version "1.14.9") "fsname=${targetDir}"
             );
             bindfsOptionFlag = optionalString (bindfsOptions != "") (" -o " + bindfsOptions);
@@ -346,14 +375,11 @@ in
             fi
           '';
 
-        mkBindMountsForPath = persistentStorageName:
-          concatMapStrings
-            (mkBindMount persistentStorageName)
-            (map getDirPath (filter isBindfs cfg.${persistentStorageName}.directories));
+        mkBindMounts = concatMapStrings (opt: mkBindMount opt) bindOptions;
 
-        mkUnmount = persistentStorageName: dir:
+        mkUnmount = opt:
           let
-            mountDir = formatPath persistentStorageName dir;
+            mountDir = opt.target;
             mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
           in
           ''
@@ -362,14 +388,11 @@ in
             fi
           '';
 
-        mkUnmountsForPath = persistentStorageName:
-          concatMapStrings
-            (mkUnmount persistentStorageName)
-            (map getDirPath (filter isBindfs cfg.${persistentStorageName}.directories));
+        mkUnmounts = concatMapStrings (opt: mkUnmount opt) (lists.reverseList bindOptions);
 
-        mkLinkCleanup = persistentStorageName: dir:
+        mkLinkCleanup = opt:
           let
-            mountDir = formatPath persistentStorageName dir;
+            mountDir = opt.target;
             mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
           in
           ''
@@ -383,30 +406,25 @@ in
             fi
           '';
 
-        mkLinkCleanupForPath = persistentStorageName:
-          concatMapStrings
-            (mkLinkCleanup persistentStorageName)
-            (map getDirPath (filter isSymlink cfg.${persistentStorageName}.directories));
-
-
+        mkLinkCleanupForOptions = concatMapStrings (opt: mkLinkCleanup opt) (lists.reverseList symlinkOptions);
       in
       mkMerge [
-        (mkIf (any (path: (filter isSymlink cfg.${path}.directories) != [ ]) persistentStorageNames) {
+        (mkIf (symlinkOptions != [ ]) {
           # Clean up existing empty directories in the way of links
           cleanEmptyLinkTargets =
             dag.entryBefore
               [ "checkLinkTargets" ]
               ''
-                ${concatMapStrings mkLinkCleanupForPath persistentStorageNames}
+                ${mkLinkCleanupForOptions}
               '';
         })
-        (mkIf (any (path: (filter isBindfs cfg.${path}.directories) != [ ]) persistentStorageNames) {
+        (mkIf (bindOptions != [ ]) {
           createAndMountPersistentStoragePaths =
             dag.entryBefore
               [ "writeBoundary" ]
               ''
                 declare -A mountedPaths
-                ${(concatMapStrings mkBindMountsForPath persistentStorageNames)}
+                ${mkBindMounts}
               '';
 
           unmountPersistentStoragePaths =
@@ -415,7 +433,7 @@ in
               ''
                 PATH=$PATH:/run/wrappers/bin
                 unmountBindMounts() {
-                ${concatMapStrings mkUnmountsForPath persistentStorageNames}
+                  ${mkUnmounts}
                 }
 
                 # Run the unmount function on error to clean up stray
@@ -430,18 +448,15 @@ in
                 unmountBindMounts
               '';
         })
-        (mkIf (any (path: (cfg.${path}.files != [ ]) || ((filter isSymlink cfg.${path}.directories) != [ ])) persistentStorageNames) {
+        (mkIf (any (opt: opt.type == "file" || opt.method == "symlink") persistenceOptions) {
           createTargetFileDirectories =
             dag.entryBefore
               [ "writeBoundary" ]
               (concatMapStrings
-                (persistentStorageName:
-                  concatMapStrings
-                    (targetFilePath: ''
-                      mkdir -p ${escapeShellArg (concatPaths [ cfg.${persistentStorageName}.persistentStoragePath (dirOf targetFilePath) ])}
-                    '')
-                    (map getDirPath (cfg.${persistentStorageName}.files ++ (filter isSymlink cfg.${persistentStorageName}.directories))))
-                persistentStorageNames);
+                (opt: ''
+                  mkdir -p ${escapeShellArg (concatPaths [ opt.persistence (dirOf opt.target) ])}
+                '')
+                persistenceOptions);
         })
       ];
   };
