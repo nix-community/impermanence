@@ -49,6 +49,12 @@ let
     patchShebangs $out
   '';
 
+  defaultPerms = {
+    mode = "0755";
+    user = "root";
+    group = "root";
+  };
+
   # Create fileSystems bind mount entry.
   mkBindMountNameValuePair = { dirPath, persistentStoragePath, hideMount, ... }: {
     name = concatPaths [ "/" dirPath ];
@@ -87,11 +93,6 @@ in
           submodule (
             { name, config, ... }:
             let
-              defaultPerms = {
-                mode = "0755";
-                user = "root";
-                group = "root";
-              };
               commonOpts = {
                 options = {
                   persistentStoragePath = mkOption {
@@ -566,11 +567,6 @@ in
               foldl'
                 (state: dir:
                   let
-                    defaultPerms = {
-                      mode = "0755";
-                      user = "root";
-                      group = "root";
-                    };
                     homeDir = {
                       directory = dir.home;
                       dirPath = dir.home;
@@ -592,6 +588,29 @@ in
                 )
                 [ ]
                 explicitDirs;
+
+            # Persistent storage directories. These need to be created
+            # unless they're at the root of a filesystem.
+            persistentStorageDirs =
+              foldl'
+                (state: dir:
+                  let
+                    persistentStorageDir = {
+                      directory = dir.persistentStoragePath;
+                      dirPath = dir.persistentStoragePath;
+                      persistentStoragePath = "";
+                      home = null;
+                      inherit (dir) defaultPerms enableDebugging;
+                      inherit (dir.defaultPerms) user group mode;
+                    };
+                  in
+                  if dir.home == null && !(elem persistentStorageDir state) then
+                    state ++ [ persistentStorageDir ]
+                  else
+                    state
+                )
+                [ ]
+                (explicitDirs ++ homeDirs);
 
             # Generate entries for all parent directories of the
             # argument directories, listed in the order they need to
@@ -619,6 +638,8 @@ in
               in
               unique (flatten (map mkParents dirs));
 
+            persistentStorageDirParents = mkParentDirs persistentStorageDirs;
+
             # Parent directories of home folders. This is usually only
             # /home, unless the user's home is in a non-standard
             # location.
@@ -628,7 +649,13 @@ in
             parentDirs = mkParentDirs explicitDirs;
 
             # All directories in the order they should be created.
-            allDirs = homeDirParents ++ homeDirs ++ parentDirs ++ explicitDirs;
+            allDirs =
+              persistentStorageDirParents
+              ++ persistentStorageDirs
+              ++ homeDirParents
+              ++ homeDirs
+              ++ parentDirs
+              ++ explicitDirs;
           in
           pkgs.writeShellScript "impermanence-run-create-directories" ''
             _status=0
