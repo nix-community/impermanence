@@ -97,7 +97,7 @@
     allows you to keep a number of old roots around, in case of
     crashes, power outages or other accidents.
 
-    A setup which would remove automatically remove roots that are
+    A setup which would automatically remove roots that are
     older than 30 days could look like this:
 
     #+begin_src nix
