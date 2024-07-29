@@ -8,6 +8,8 @@ let
     concatPaths
     sanitizeName
     parentsOf
+    mkMountPath
+    mkServiceName
     ;
 
   cfg = config.home.persistence;
@@ -245,15 +247,11 @@ in
 
     systemd.user.services =
       let
-        mkTargetDir = opt: escapeShellArg (concatPaths [ opt.persistence opt.target ]);
-        mkMountPoint = opt: escapeShellArg (concatPaths [ config.home.homeDirectory opt.target ]);
-        mkName = opt: "bindMount-${sanitizeName (mkTargetDir opt)}";
-
         mkBindMountService = opt:
           let
-            name = mkName opt;
-            targetDir = mkTargetDir opt;
-            mountPoint = mkMountPoint opt;
+            targetDir = mkMountPath opt.persistence opt.target;
+            mountPoint = mkMountPath config.home.homeDirectory opt.target;
+            name = mkServiceName opt.persistence opt.target;
 
             bindfsOptions = concatStringsSep "," (
               optional (!opt.allowOther) "no-allow-other"
@@ -269,7 +267,7 @@ in
                 (path: lists.findFirst (opt: opt.target == path) null persistenceOptions)
                 parentPaths);
 
-            dependencies = map (dep: "${mkName dep}.service") parents;
+            dependencies = map (dep: "${mkServiceName dep.persistence dep.target}.service") parents;
 
             startScript = pkgs.writeShellScript name ''
               set -eu
@@ -342,9 +340,8 @@ in
 
         mkBindMount = opt:
           let
-            mountDir = opt.target;
-            targetDir = escapeShellArg (concatPaths [ opt.persistence opt.target ]);
-            mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
+            targetDir = mkMountPath opt.persistence opt.target;
+            mountPoint = mkMountPath config.home.homeDirectory opt.target;
             bindfsOptions = concatStringsSep "," (
               optional (!opt.allowOther) "no-allow-other"
               ++ optional (versionAtLeast pkgs.bindfs.version "1.14.9") "fsname=${targetDir}"
@@ -379,8 +376,7 @@ in
 
         mkUnmount = opt:
           let
-            mountDir = opt.target;
-            mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
+            mountPoint = mkMountPath config.home.homeDirectory opt.target;
           in
           ''
             if [[ -n ''${mountedPaths[${mountPoint}]+x} ]]; then
@@ -392,8 +388,7 @@ in
 
         mkLinkCleanup = opt:
           let
-            mountDir = opt.target;
-            mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
+            mountPoint = mkMountPath config.home.homeDirectory opt.target;
           in
           ''
             # Unmount if it's mounted. Ensures smooth transition: bindfs -> symlink
@@ -454,7 +449,7 @@ in
               [ "writeBoundary" ]
               (concatMapStrings
                 (opt: ''
-                  mkdir -p ${escapeShellArg (concatPaths [ opt.persistence (dirOf opt.target) ])}
+                  mkdir -p ${mkMountPath opt.persistence (dirOf opt.target)}
                 '')
                 persistenceOptions);
         })

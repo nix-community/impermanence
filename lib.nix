@@ -14,6 +14,7 @@ let
     take
     length
     last
+    escapeShellArg
     ;
   inherit (lib.strings)
     sanitizeDerivationName
@@ -79,6 +80,10 @@ let
           list;
     in
     result.duplicates;
+
+  mkMountPath = root: child: escapeShellArg (concatPaths [ root child ]);
+
+  mkServiceName = root: child: "bindMount-${sanitizeName (mkMountPath root child)}";
 in
 {
   inherit
@@ -88,5 +93,7 @@ in
     parentsOf
     sanitizeName
     duplicates
+    mkMountPath
+    mkServiceName
     ;
 }
