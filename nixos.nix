@@ -25,9 +25,11 @@ let
     concatMapStringsSep
     catAttrs
     optional
+    optionalString
     literalExpression
     elem
     mapAttrs
+    intersectLists
     ;
 
   inherit (utils)
@@ -682,9 +684,6 @@ in
         homeDirOffenders =
           filterAttrs
             (n: v: (v.home != config.users.users.${n}.home));
-        usersWithoutUid = attrNames (filterAttrs (n: u: u.uid == null) config.users.users);
-        groupsWithoutGid = attrNames (filterAttrs (n: g: g.gid == null) config.users.groups);
-        varLibNixosPersisted = elem "/var/lib/nixos" (catAttrs "dirPath" directories);
       in
       [
         {
@@ -756,19 +755,38 @@ in
                     ${concatStringsSep "\n      " offenders}
             '';
         }
-        {
-          assertion = varLibNixosPersisted || (usersWithoutUid == [ ] && groupsWithoutGid == [ ]);
-          message = ''
-            environment.persistence:
-                Either "/var/lib/nixos" has to be persisted, or all users and
-                groups must have a uid/gid specified. The following users are
-                missing a uid:
-                  ${concatStringsSep "\n      " usersWithoutUid}
-                The following groups are missing a gid:
-                  ${concatStringsSep "\n      " groupsWithoutGid}
-          '';
-        }
       ];
+
+    warnings =
+      let
+        usersWithoutUid = attrNames (filterAttrs (n: u: u.uid == null) config.users.users);
+        groupsWithoutGid = attrNames (filterAttrs (n: g: g.gid == null) config.users.groups);
+        varLibNixosPersisted =
+          let
+            varDirs = parentsOf "/var/lib/nixos" ++ [ "/var/lib/nixos" ];
+            persistedDirs = catAttrs "dirPath" directories;
+            persistedVarDirs = intersectLists varDirs persistedDirs;
+          in
+          persistedVarDirs != [];
+      in
+      mkIf (!varLibNixosPersisted && (usersWithoutUid != [ ] || groupsWithoutGid != [ ]))
+        [
+          ''
+            environment.persistence:
+                Neither /var/lib/nixos nor any of its parents are
+                persisted. This means all users/groups without
+                specified uids/gids will have them reassigned on
+                reboot.
+                ${optionalString (usersWithoutUid != [ ]) ''
+                The following users are missing a uid:
+                      ${concatStringsSep "\n      " usersWithoutUid}
+                ''}
+                ${optionalString (groupsWithoutGid != [ ]) ''
+                The following groups are missing a gid:
+                      ${concatStringsSep "\n      " groupsWithoutGid}
+                ''}
+          ''
+        ];
   };
 
 }
