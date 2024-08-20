@@ -778,7 +778,7 @@ in
             persistedDirs = catAttrs "dirPath" directories;
             persistedVarDirs = intersectLists varDirs persistedDirs;
           in
-          persistedVarDirs != [];
+          persistedVarDirs != [ ];
       in
       mkIf (any id allPersistentStoragePaths.enableWarnings)
         (mkMerge [
@@ -797,8 +797,9 @@ in
                   The following groups are missing a gid:
                         ${concatStringsSep "\n      " groupsWithoutGid}
                   ''}
-            ''])
-      ]);
+            ''
+          ])
+        ]);
   };
 
 }
