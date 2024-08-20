@@ -9,6 +9,7 @@ let
     mkOption
     mkDefault
     mkIf
+    mkMerge
     mapAttrsToList
     types
     foldl'
@@ -30,6 +31,8 @@ let
     elem
     mapAttrs
     intersectLists
+    any
+    id
     ;
 
   inherit (utils)
@@ -425,6 +428,14 @@ in
                       to.
                     '';
                   };
+
+                  enableWarnings = mkOption {
+                    type = bool;
+                    default = true;
+                    description = ''
+                      Enable non-critical warnings.
+                    '';
+                  };
                 };
               config =
                 let
@@ -769,24 +780,25 @@ in
           in
           persistedVarDirs != [];
       in
-      mkIf (!varLibNixosPersisted && (usersWithoutUid != [ ] || groupsWithoutGid != [ ]))
-        [
-          ''
-            environment.persistence:
-                Neither /var/lib/nixos nor any of its parents are
-                persisted. This means all users/groups without
-                specified uids/gids will have them reassigned on
-                reboot.
-                ${optionalString (usersWithoutUid != [ ]) ''
-                The following users are missing a uid:
-                      ${concatStringsSep "\n      " usersWithoutUid}
-                ''}
-                ${optionalString (groupsWithoutGid != [ ]) ''
-                The following groups are missing a gid:
-                      ${concatStringsSep "\n      " groupsWithoutGid}
-                ''}
-          ''
-        ];
+      mkIf (any id allPersistentStoragePaths.enableWarnings)
+        (mkMerge [
+          (mkIf (!varLibNixosPersisted && (usersWithoutUid != [ ] || groupsWithoutGid != [ ])) [
+            ''
+              environment.persistence:
+                  Neither /var/lib/nixos nor any of its parents are
+                  persisted. This means all users/groups without
+                  specified uids/gids will have them reassigned on
+                  reboot.
+                  ${optionalString (usersWithoutUid != [ ]) ''
+                  The following users are missing a uid:
+                        ${concatStringsSep "\n      " usersWithoutUid}
+                  ''}
+                  ${optionalString (groupsWithoutGid != [ ]) ''
+                  The following groups are missing a gid:
+                        ${concatStringsSep "\n      " groupsWithoutGid}
+                  ''}
+            ''])
+      ]);
   };
 
 }
