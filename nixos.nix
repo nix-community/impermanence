@@ -772,17 +772,19 @@ in
       let
         usersWithoutUid = attrNames (filterAttrs (n: u: u.uid == null) config.users.users);
         groupsWithoutGid = attrNames (filterAttrs (n: g: g.gid == null) config.users.groups);
-        varLibNixosPersisted =
+        varLibNixosPersistent =
           let
             varDirs = parentsOf "/var/lib/nixos" ++ [ "/var/lib/nixos" ];
             persistedDirs = catAttrs "dirPath" directories;
+            mountedDirs = catAttrs "mountPoint" (attrValues config.fileSystems);
             persistedVarDirs = intersectLists varDirs persistedDirs;
+            mountedVarDirs = intersectLists varDirs mountedDirs;
           in
-          persistedVarDirs != [ ];
+          persistedVarDirs != [ ] || mountedVarDirs != [ ];
       in
       mkIf (any id allPersistentStoragePaths.enableWarnings)
         (mkMerge [
-          (mkIf (!varLibNixosPersisted && (usersWithoutUid != [ ] || groupsWithoutGid != [ ])) [
+          (mkIf (!varLibNixosPersistent && (usersWithoutUid != [ ] || groupsWithoutGid != [ ])) [
             ''
               environment.persistence:
                   Neither /var/lib/nixos nor any of its parents are
