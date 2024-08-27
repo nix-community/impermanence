@@ -422,6 +422,9 @@
     the directories you add will be visible in the ~/etc/mtab~ file and in the
     output of ~mount~ to all users.
 
+    /Warning:/ Do not add `.config/systemd` folder when using home-manager's module
+    otherwise it won't work.
+
 ** Further reading
    The following blog posts provide more information on the concept of ephemeral
    roots:
