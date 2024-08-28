@@ -18,6 +18,14 @@ let
     (builtins.sort (a: b: a.dir.directory < b.dir.directory))
   ];
 
+  dirsByHomeMountpoint = lib.pipe orderedDirs [
+    (builtins.map (e: {
+      name = concatPaths [ config.home.homeDirectory e.dir.directory ];
+      value = e;
+    }))
+    builtins.listToAttrs
+  ];
+
   orderedFiles = lib.pipe cfg [
     (lib.attrsets.mapAttrsToList (persistentStorageName: conf:
       builtins.map (file: { inherit persistentStorageName file; }) conf.files
@@ -296,6 +304,22 @@ in
                   "paths.target"
                   "sockets.target"
                   "timers.target"
+                ];
+
+
+                After = lib.pipe dir [
+                  # generate all system path prefixes
+                  (lib.strings.splitString "/")
+                  (pcs: builtins.map (i: lib.lists.sublist 0 i pcs) (lib.lists.range 0 (builtins.length pcs - 1)))
+                  (builtins.map (lib.strings.concatStringsSep "/"))
+
+                  # try to find an existing mountpoint for each generated path, skip those not found
+                  (builtins.map (path: let homePath = concatPaths [ config.home.homeDirectory path ]; in dirsByHomeMountpoint.${homePath} or null))
+                  (builtins.filter (e: e != null))
+
+                  # replicate what `targetDir` & `name` do
+                  (builtins.map (e: escapeShellArg (concatPaths [ cfg.${e.persistentStorageName}.persistentStoragePath e.dir.directory ])))
+                  (builtins.map (path: "bindMount-${sanitizeName path}.service"))
                 ];
               };
 
