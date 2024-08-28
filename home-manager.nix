@@ -7,9 +7,24 @@ let
   persistentStorageNames = attrNames cfg;
 
   getDirPath = v: if isString v then v else v.directory;
-  getDirMethod = v: v.method or "bindfs";
-  isBindfs = v: (getDirMethod v) == "bindfs";
-  isSymlink = v: (getDirMethod v) == "symlink";
+  isBindfs = v: v.method == "bindfs";
+  isSymlink = v:  v.method == "symlink";
+
+  orderedDirs = lib.pipe cfg [
+    (lib.attrsets.mapAttrsToList (persistentStorageName: conf:
+      builtins.map (dir: { inherit persistentStorageName dir; }) conf.directories
+    ))
+    builtins.concatLists
+    (builtins.sort (a: b: a.dir.directory < b.dir.directory))
+  ];
+
+  orderedFiles = lib.pipe cfg [
+    (lib.attrsets.mapAttrsToList (persistentStorageName: conf:
+      builtins.map (file: { inherit persistentStorageName file; }) conf.files
+    ))
+    builtins.concatLists
+    (builtins.sort (a: b: a.file < b.file))
+  ];
 
   inherit (pkgs.callPackage ./lib.nix { })
     splitPath
@@ -98,6 +113,10 @@ in
                   you want to link to persistent storage. You may optionally
                   specify the linking method each directory should use.
                 '';
+                apply = builtins.map (directory: if !(builtins.isString directory) then directory else {
+                  inherit directory;
+                  method = "bindfs";
+                });
               };
 
               files = mkOption {
@@ -355,11 +374,6 @@ in
             fi
           '';
 
-        mkBindMountsForPath = persistentStorageName:
-          concatMapStrings
-            (mkBindMount persistentStorageName)
-            (map getDirPath (filter isBindfs cfg.${persistentStorageName}.directories));
-
         mkUnmount = persistentStorageName: dir:
           let
             mountDir =
@@ -374,11 +388,6 @@ in
               ${unmountScript mountPoint 3 1}
             fi
           '';
-
-        mkUnmountsForPath = persistentStorageName:
-          concatMapStrings
-            (mkUnmount persistentStorageName)
-            (map getDirPath (filter isBindfs cfg.${persistentStorageName}.directories));
 
         mkLinkCleanup = persistentStorageName: dir:
           let
@@ -400,12 +409,12 @@ in
             fi
           '';
 
-        mkLinkCleanupForPath = persistentStorageName:
-          concatMapStrings
-            (mkLinkCleanup persistentStorageName)
-            (map getDirPath (filter isSymlink cfg.${persistentStorageName}.directories));
-
-
+        mkDirScripts = {filterFn, mapFn, reverse ? false}: lib.pipe orderedDirs [
+          (builtins.filter (e: filterFn e.dir))
+          (builtins.map ({persistentStorageName, dir}: mapFn persistentStorageName dir.directory))
+          (if reverse then lib.lists.reverseList else (x: x))
+          (builtins.concatStringsSep "\n")
+        ];
       in
       mkMerge [
         (mkIf (any (path: (filter isSymlink cfg.${path}.directories) != [ ]) persistentStorageNames) {
@@ -413,9 +422,7 @@ in
           cleanEmptyLinkTargets =
             dag.entryBefore
               [ "checkLinkTargets" ]
-              ''
-                ${concatMapStrings mkLinkCleanupForPath persistentStorageNames}
-              '';
+              (mkDirScripts {filterFn = isBindfs; mapFn = mkLinkCleanup; reverse = true; });
         })
         (mkIf (any (path: (filter isBindfs cfg.${path}.directories) != [ ]) persistentStorageNames) {
           createAndMountPersistentStoragePaths =
@@ -423,7 +430,7 @@ in
               [ "writeBoundary" ]
               ''
                 declare -A mountedPaths
-                ${(concatMapStrings mkBindMountsForPath persistentStorageNames)}
+                ${mkDirScripts {filterFn = isBindfs; mapFn = mkBindMount; reverse = false; }}
               '';
 
           unmountPersistentStoragePaths =
@@ -432,7 +439,7 @@ in
               ''
                 PATH=$PATH:/run/wrappers/bin
                 unmountBindMounts() {
-                ${concatMapStrings mkUnmountsForPath persistentStorageNames}
+                ${mkDirScripts {filterFn = isBindfs; mapFn = mkUnmount; reverse = true; }}
                 }
 
                 # Run the unmount function on error to clean up stray
@@ -451,14 +458,19 @@ in
           createTargetFileDirectories =
             dag.entryBefore
               [ "writeBoundary" ]
-              (concatMapStrings
-                (persistentStorageName:
-                  concatMapStrings
-                    (targetFilePath: ''
-                      mkdir -p ${escapeShellArg (concatPaths [ cfg.${persistentStorageName}.persistentStoragePath (dirOf targetFilePath) ])}
-                    '')
-                    (map getDirPath (cfg.${persistentStorageName}.files ++ (filter isSymlink cfg.${persistentStorageName}.directories))))
-                persistentStorageNames);
+              (lib.pipe (orderedFiles ++ (builtins.filter (d: isSymlink d.dir) orderedDirs)) [
+                (builtins.map ({persistentStorageName, ...}@e: lib.pipe (e.file or e.dir.directory) [
+                  dirOf
+                  (path: concatPaths [
+                    cfg.${persistentStorageName}.persistentStoragePath
+                    path
+                  ])
+                ]))
+                (builtins.sort (a: b: a < b))
+                lib.lists.unique
+                (builtins.map (path: ''mkdir -p ${escapeShellArg path}''))
+                (builtins.concatStringsSep "\n")
+              ]);
         })
       ];
   };
