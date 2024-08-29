@@ -2,72 +2,98 @@
 
 with lib;
 let
-  cfg = config.home.persistence;
+  cfg = config.impermanence;
+  persistentStorages = builtins.mapAttrs
+    (_: persistentStorage:
+      let
+        storage = persistentStorage // {
+          mkDirCfg = getHomeDirCfg {
+            inherit storage pkgs;
+            inherit (config.home) homeDirectory;
+          };
+        };
+      in
+      storage
+    )
+    config.home.persistence;
 
-  persistentStorageNames = attrNames cfg;
+  persistentStoragesList = builtins.attrValues persistentStorages;
 
-  getDirPath = v: if isString v then v else v.directory;
+  getPath = v: if isString v then v else v.directory or v.file;
   isBindfs = v: v.method == "bindfs";
-  isSymlink = v:  v.method == "symlink";
+  isSymlink = v: v.method == "symlink";
 
-  orderedDirs = lib.pipe cfg [
-    (lib.attrsets.mapAttrsToList (persistentStorageName: conf:
-      builtins.map (dir: { inherit persistentStorageName dir; }) conf.directories
+  orderedDirs = lib.pipe persistentStorages [
+    (lib.attrsets.mapAttrsToList (persistentStorageName: storage: builtins.map
+      (dir: {
+        inherit persistentStorageName storage dir;
+        inherit (dir) method;
+        path = dir.directory;
+        dirCfg = storage.mkDirCfg dir.directory;
+      })
+      storage.directories
     ))
     builtins.concatLists
-    (builtins.sort (a: b: a.dir.directory < b.dir.directory))
+    (builtins.sort (a: b: a.path < b.path))
   ];
 
   dirsByHomeMountpoint = lib.pipe orderedDirs [
     (builtins.map (e: {
-      name = concatPaths [ config.home.homeDirectory e.dir.directory ];
+      name = e.dirCfg.mountPoint;
       value = e;
     }))
     builtins.listToAttrs
   ];
 
-  orderedFiles = lib.pipe cfg [
-    (lib.attrsets.mapAttrsToList (persistentStorageName: conf:
-      builtins.map (file: { inherit persistentStorageName file; }) conf.files
+  orderedFiles = lib.pipe persistentStorages [
+    (lib.attrsets.mapAttrsToList (persistentStorageName: storage: builtins.map
+      (file: {
+        inherit persistentStorageName storage file;
+        inherit (file) method;
+        path = file.file;
+        dirCfg = storage.mkDirCfg file.file;
+      })
+      storage.files
     ))
     builtins.concatLists
-    (builtins.sort (a: b: a.file < b.file))
+    (builtins.sort (a: b: a.path < b.path))
   ];
 
   inherit (pkgs.callPackage ./lib.nix { })
-    splitPath
-    dirListToPath
-    concatPaths
+    getHomeDirCfg
     sanitizeName
     ;
 
-  mount = "${pkgs.util-linux}/bin/mount";
-  unmountScript = mountPoint: tries: sleep: ''
-    triesLeft=${toString tries}
-    if ${mount} | grep -F ${mountPoint}' ' >/dev/null; then
-        while (( triesLeft > 0 )); do
-            if fusermount -u ${mountPoint}; then
-                break
-            else
-                (( triesLeft-- ))
-                if (( triesLeft == 0 )); then
-                    echo "Couldn't perform regular unmount of ${mountPoint}. Attempting lazy unmount."
-                    fusermount -uz ${mountPoint}
-                else
-                    sleep ${toString sleep}
-                fi
-            fi
-        done
-    fi
-  '';
+  scripts = pkgs.callPackage ./scripts { systemctl = config.systemd.user.systemctlPath; };
 in
 {
   options = {
 
+    impermanence.defaultDirectoryMethod = lib.mkOption {
+      type = with types; enum [ "bindfs" "symlink" "external" ];
+      default = "bindfs";
+      description = ''
+        The linking method that should be used by default for directories:
+        - `bindfs` is the default (for non-root user) and works for most use cases,
+        - `symlink` is there for the programs misbehaving with `bindfs`,
+        - `external` allows you to handle the setup in your own code, this is default for `root`,
+      '';
+    };
+
+    impermanence.defaultFileMethod = lib.mkOption {
+      type = with types; enum [ "symlink" "external" ];
+      default = "symlink";
+      description = ''
+        The linking method that should be used for files:
+        - `symlink` is the default (for non-root user),
+        - `external` allows you to handle the setup in your own code, this is default for `root`,
+      '';
+    };
+
     home.persistence = mkOption {
       default = { };
       type = with types; attrsOf (
-        submodule ({ name, ... }: {
+        submodule ({ name, ... }@persistenceArgs: {
           options =
             {
               persistentStoragePath = mkOption {
@@ -79,26 +105,51 @@ in
                 '';
               };
 
+              defaultDirectoryMethod = lib.mkOption {
+                type = with types; enum [ "bindfs" "symlink" "external" ];
+                default = cfg.defaultDirectoryMethod;
+                description = ''
+                  The linking method that should be used for directories,
+                  see `impermanence.defaultDirectoryMethod` for details.
+                '';
+              };
+
+              defaultFileMethod = lib.mkOption {
+                type = with types; enum [ "symlink" "external" ];
+                default = cfg.defaultFileMethod;
+                description = ''
+                  The linking method that should be used for files,
+                  see `impermanence.defaultFileMethod` for details.
+                '';
+              };
+
               directories = mkOption {
-                type = with types; listOf (either str (submodule {
-                  options = {
-                    directory = mkOption {
-                      type = str;
-                      default = null;
-                      description = "The directory path to be linked.";
+                type =
+                  let
+                    directoryType = types.submodule {
+                      options = {
+                        directory = mkOption {
+                          type = with types; str;
+                          default = null;
+                          description = "The directory path to be linked.";
+                        };
+                        method = mkOption {
+                          type = with types; enum [ "bindfs" "symlink" "external" ];
+                          default = persistenceArgs.config.defaultDirectoryMethod;
+                          description = ''
+                            The linking method that should be used for this directory,
+                            see `impermanence.defaultDirectoryMethod` for details.
+                          '';
+                        };
+                      };
                     };
-                    method = mkOption {
-                      type = types.enum [ "bindfs" "symlink" ];
-                      default = "bindfs";
-                      description = ''
-                        The linking method that should be used for this
-                        directory. bindfs is the default and works for most use
-                        cases, however some programs may behave better with
-                        symlinks.
-                      '';
-                    };
-                  };
-                }));
+                  in
+                  with types; listOf (
+                    coercedTo
+                      (either str directoryType)
+                      (value: if builtins.isString value then { directory = value; } else value)
+                      directoryType
+                  );
                 default = [ ];
                 example = [
                   "Downloads"
@@ -121,17 +172,42 @@ in
                   you want to link to persistent storage. You may optionally
                   specify the linking method each directory should use.
                 '';
-                apply = builtins.map (directory: if !(builtins.isString directory) then directory else {
-                  inherit directory;
-                  method = "bindfs";
-                });
               };
 
               files = mkOption {
-                type = with types; listOf str;
+                type =
+                  let
+                    fileType = types.submodule {
+                      options = {
+                        file = mkOption {
+                          type = with types; str;
+                          default = null;
+                          description = "The file path to be linked.";
+                        };
+                        method = mkOption {
+                          type = with types; enum [ "symlink" "external" ];
+                          default = persistenceArgs.config.defaultFileMethod;
+                          description = ''
+                            The linking method that should be used for this file,
+                            see `impermanence.defaultFileMethod` for details.
+                          '';
+                        };
+                      };
+                    };
+                  in
+                  with types; listOf (
+                    coercedTo
+                      (either str fileType)
+                      (value: if builtins.isString value then { file = value; } else value)
+                      fileType
+                  );
                 default = [ ];
                 example = [
                   ".screenrc"
+                  {
+                    directory = ".bashrc";
+                    method = "external";
+                  }
                 ];
                 description = ''
                   A list of files in your home directory you want to
@@ -233,62 +309,36 @@ in
             { }
             "ln -s '${file}' $out";
 
-        mkLinkNameValuePair = persistentStorageName: fileOrDir: {
-          name =
-            if cfg.${persistentStorageName}.removePrefixDirectory then
-              dirListToPath (tail (splitPath [ fileOrDir ]))
-            else
-              fileOrDir;
-          value = { source = link (concatPaths [ cfg.${persistentStorageName}.persistentStoragePath fileOrDir ]); };
-        };
+        mkLinkNameValuePair = storage: fileOrDir:
+          let
+            dirCfg = storage.mkDirCfg fileOrDir;
+          in
+          {
+            name = dirCfg.mountDir;
+            value = { source = link dirCfg.targetDir; };
+          };
 
-        mkLinksToPersistentStorage = persistentStorageName:
+        mkLinksToPersistentStorage = storage:
           listToAttrs (map
-            (mkLinkNameValuePair persistentStorageName)
-            (map getDirPath (cfg.${persistentStorageName}.files ++
-              (filter isSymlink cfg.${persistentStorageName}.directories)))
+            (mkLinkNameValuePair storage)
+            (map getPath (builtins.filter isSymlink (storage.files ++ storage.directories)))
           );
       in
-      foldl' recursiveUpdate { } (map mkLinksToPersistentStorage persistentStorageNames);
+      foldl' recursiveUpdate { } (map mkLinksToPersistentStorage persistentStoragesList);
 
     systemd.user.services =
       let
-        mkBindMountService = persistentStorageName: dir:
+        mkBindMountService = storage: dir:
           let
-            mountDir =
-              if cfg.${persistentStorageName}.removePrefixDirectory then
-                dirListToPath (tail (splitPath [ dir ]))
-              else
-                dir;
-            targetDir = escapeShellArg (concatPaths [ cfg.${persistentStorageName}.persistentStoragePath dir ]);
-            mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
-            name = "bindMount-${sanitizeName targetDir}";
-            bindfsOptions = concatStringsSep "," (
-              optional (!cfg.${persistentStorageName}.allowOther) "no-allow-other"
-              ++ optional (versionAtLeast pkgs.bindfs.version "1.14.9") "fsname=${targetDir}"
-            );
-            bindfsOptionFlag = optionalString (bindfsOptions != "") (" -o " + bindfsOptions);
-            bindfs = "bindfs" + bindfsOptionFlag;
-            startScript = pkgs.writeShellScript name ''
-              set -eu
-              if ! mount | grep -F ${mountPoint}' ' && ! mount | grep -F ${mountPoint}/; then
-                  mkdir -p ${mountPoint}
-                  exec ${bindfs} ${targetDir} ${mountPoint}
-              else
-                  echo "There is already an active mount at or below ${mountPoint}!" >&2
-                  exit 1
-              fi
-            '';
-            stopScript = pkgs.writeShellScript "unmount-${name}" ''
-              set -eu
-              ${unmountScript mountPoint 6 5}
-            '';
+            dirCfg = storage.mkDirCfg dir;
+            name = dirCfg.unitName;
           in
           {
+            # try to keep those changes in sync with scripts scripts/hm-bind-mount-activation.bash:bindfs-run()
             inherit name;
             value = {
               Unit = {
-                Description = "Bind mount ${targetDir} at ${mountPoint}";
+                Description = "Bind mount ${dirCfg.escaped.targetDir} at ${dirCfg.escaped.mountPoint}";
 
                 # Don't restart the unit, it could corrupt data and
                 # crash programs currently reading from the mount.
@@ -306,7 +356,6 @@ in
                   "timers.target"
                 ];
 
-
                 After = lib.pipe dir [
                   # generate all system path prefixes
                   (lib.strings.splitString "/")
@@ -314,41 +363,47 @@ in
                   (builtins.map (lib.strings.concatStringsSep "/"))
 
                   # try to find an existing mountpoint for each generated path, skip those not found
-                  (builtins.map (path: let homePath = concatPaths [ config.home.homeDirectory path ]; in dirsByHomeMountpoint.${homePath} or null))
+                  (builtins.map (path: let inherit (storage.mkDirCfg path) mountPoint; in dirsByHomeMountpoint.${mountPoint} or null))
                   (builtins.filter (e: e != null))
 
-                  # replicate what `targetDir` & `name` do
-                  (builtins.map (e: escapeShellArg (concatPaths [ cfg.${e.persistentStorageName}.persistentStoragePath e.dir.directory ])))
-                  (builtins.map (path: "bindMount-${sanitizeName path}.service"))
+                  (builtins.map (orderedDir: "${orderedDir.dirCfg.unitName}.service"))
                 ];
+
+                ConditionPathIsMountPoint = [ "!${dirCfg.mountPoint}" ];
               };
 
               Install.WantedBy = [ "paths.target" ];
 
               Service = {
                 Type = "forking";
-                ExecStart = "${startScript}";
-                ExecStop = "${stopScript}";
-                Environment = "PATH=${makeBinPath [ pkgs.coreutils pkgs.util-linux pkgs.gnugrep pkgs.bindfs ]}:/run/wrappers/bin";
+                ExecStart = escapeShellArgs ([
+                  (lib.getExe scripts.hm.bind-mount-service)
+                  dirCfg.targetDir
+                  dirCfg.mountPoint
+                ] ++ dirCfg.runBindfsArgs);
+
+                ExecStop = escapeShellArgs [
+                  (lib.getExe scripts.hm.unmount)
+                  dirCfg.mountPoint
+                  "6"
+                  "5"
+                ];
+                Slice = "background.slice";
               };
             };
           };
 
-        mkBindMountServicesForPath = persistentStorageName:
+        mkBindMountServicesForPath = storage:
           listToAttrs (map
-            (mkBindMountService persistentStorageName)
-            (map getDirPath (filter isBindfs cfg.${persistentStorageName}.directories))
+            (mkBindMountService storage)
+            (map getPath (filter isBindfs storage.directories))
           );
       in
-      builtins.foldl'
-        recursiveUpdate
-        { }
-        (map mkBindMountServicesForPath persistentStorageNames);
+      builtins.foldl' recursiveUpdate { } (map mkBindMountServicesForPath persistentStoragesList);
 
     home.activation =
       let
         dag = config.lib.dag;
-        mount = "${pkgs.util-linux}/bin/mount";
 
         # The name of the activation script entry responsible for
         # reloading systemd user services. The name was initially
@@ -359,144 +414,111 @@ in
           else
             "reloadSystemd";
 
-        mkBindMount = persistentStorageName: dir:
+        mkBindMount = orderedDir:
           let
-            mountDir =
-              if cfg.${persistentStorageName}.removePrefixDirectory then
-                dirListToPath (tail (splitPath [ dir ]))
-              else
-                dir;
-            targetDir = escapeShellArg (concatPaths [ cfg.${persistentStorageName}.persistentStoragePath dir ]);
-            mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
-            bindfsOptions = concatStringsSep "," (
-              optional (!cfg.${persistentStorageName}.allowOther) "no-allow-other"
-              ++ optional (versionAtLeast pkgs.bindfs.version "1.14.9") "fsname=${targetDir}"
-            );
-            bindfsOptionFlag = optionalString (bindfsOptions != "") (" -o " + bindfsOptions);
-            bindfs = "${pkgs.bindfs}/bin/bindfs" + bindfsOptionFlag;
-            systemctl = "XDG_RUNTIME_DIR=\${XDG_RUNTIME_DIR:-/run/user/$(id -u)} ${config.systemd.user.systemctlPath}";
+            dirCfg = orderedDir.dirCfg;
+            scriptArgs = [
+              (lib.getExe scripts.hm.bind-mount-activation)
+              dirCfg.mountPoint
+              dirCfg.targetDir
+              dirCfg.unitName
+            ] ++ dirCfg.runBindfsArgs;
           in
           ''
-            mkdir -p ${targetDir}
-            mkdir -p ${mountPoint}
+            # ${dirCfg.escaped.mountPoint} <- ${dirCfg.escaped.targetDir}
+            while read -r line; do
+              echo "$line"
+              if [[ "$line" == ${escapeShellArg scripts.outputPrefix}ERROR:* ]] ; then
+                bindMountErrors+=("''${line#${escapeShellArg scripts.outputPrefix}ERROR:}")
+              elif [[ "$line" == ${escapeShellArg scripts.outputPrefix}* ]] ; then
+                mountedPaths["''${line#${escapeShellArg scripts.outputPrefix}}"]="1"
+              fi
+            done < <(${escapeShellArgs scriptArgs} || echo ${escapeShellArg scripts.outputPrefix}ERROR:$? )
+          '';
 
-            if ${mount} | grep -F ${mountPoint}' ' >/dev/null; then
-                if ! ${mount} | grep -F ${mountPoint}' ' | grep -F bindfs; then
-                    if ! ${mount} | grep -F ${mountPoint}' ' | grep -F ${targetDir}' ' >/dev/null; then
-                        # The target directory changed, so we need to remount
-                        echo "remounting ${mountPoint}"
-                        ${systemctl} --user stop bindMount-${sanitizeName targetDir}
-                        ${bindfs} ${targetDir} ${mountPoint}
-                        mountedPaths[${mountPoint}]=1
-                    fi
-                fi
-            elif ${mount} | grep -F ${mountPoint}/ >/dev/null; then
-                echo "Something is mounted below ${mountPoint}, not creating bind mount to ${targetDir}" >&2
-            else
-                ${bindfs} ${targetDir} ${mountPoint}
-                mountedPaths[${mountPoint}]=1
+        mkUnmount = orderedDir:
+          let
+            dirCfg = orderedDir.dirCfg;
+          in
+          ''
+            # ${dirCfg.escaped.mountPoint} <- ${dirCfg.escaped.targetDir}
+            if [[ -n "''${mountedPaths[${dirCfg.escaped.mountPoint}]+x}" ]]; then
+              ${lib.getExe scripts.hm.unmount} ${dirCfg.escaped.mountPoint} 3 1
             fi
           '';
 
-        mkUnmount = persistentStorageName: dir:
+        mkLinkCleanup = orderedDir:
           let
-            mountDir =
-              if cfg.${persistentStorageName}.removePrefixDirectory then
-                dirListToPath (tail (splitPath [ dir ]))
-              else
-                dir;
-            mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
+            dirCfg = orderedDir.dirCfg;
           in
           ''
-            if [[ -n ''${mountedPaths[${mountPoint}]+x} ]]; then
-              ${unmountScript mountPoint 3 1}
-            fi
-          '';
-
-        mkLinkCleanup = persistentStorageName: dir:
-          let
-            mountDir =
-              if cfg.${persistentStorageName}.removePrefixDirectory then
-                dirListToPath (tail (splitPath [ dir ]))
-              else
-                dir;
-            mountPoint = escapeShellArg (concatPaths [ config.home.homeDirectory mountDir ]);
-          in
-          ''
+            # ${dirCfg.escaped.mountPoint} <- ${dirCfg.escaped.targetDir}
             # Unmount if it's mounted. Ensures smooth transition: bindfs -> symlink
-            ${unmountScript mountPoint 3 1}
+            ${lib.getExe scripts.hm.unmount} ${dirCfg.escaped.mountPoint} 3 1
 
             # If it is a directory and it's empty
-            if [ -d ${mountPoint} ] && [ -z "$(ls -A ${mountPoint})" ]; then
-              echo "Removing empty directory ${mountPoint}"
-              rm -d ${mountPoint}
+            if [ -d ${dirCfg.escaped.mountPoint} ] && [ -z "$(ls -A ${dirCfg.escaped.mountPoint})" ]; then
+              echo "Removing empty directory ${dirCfg.mountPoint}"
+              rm -d ${dirCfg.escaped.mountPoint}
             fi
           '';
 
-        mkDirScripts = {filterFn, mapFn, reverse ? false}: lib.pipe orderedDirs [
-          (builtins.filter (e: filterFn e.dir))
-          (builtins.map ({persistentStorageName, dir}: mapFn persistentStorageName dir.directory))
+        mkDirScripts = { filterFn, mapFn, reverse ? false }: lib.pipe orderedDirs [
+          (builtins.filter (orderedDir: filterFn orderedDir.dir))
+          (builtins.map (orderedDir: mapFn orderedDir))
           (if reverse then lib.lists.reverseList else (x: x))
+          (x: if x == [ ] then [ ": # nothing returned frmo mkDirScripts" ] else x)
           (builtins.concatStringsSep "\n")
         ];
       in
-      mkMerge [
-        (mkIf (any (path: (filter isSymlink cfg.${path}.directories) != [ ]) persistentStorageNames) {
-          # Clean up existing empty directories in the way of links
-          cleanEmptyLinkTargets =
-            dag.entryBefore
-              [ "checkLinkTargets" ]
-              (mkDirScripts {filterFn = isBindfs; mapFn = mkLinkCleanup; reverse = true; });
-        })
-        (mkIf (any (path: (filter isBindfs cfg.${path}.directories) != [ ]) persistentStorageNames) {
-          createAndMountPersistentStoragePaths =
-            dag.entryBefore
-              [ "writeBoundary" ]
-              ''
-                declare -A mountedPaths
-                ${mkDirScripts {filterFn = isBindfs; mapFn = mkBindMount; reverse = false; }}
-              '';
+      {
+        # Clean up existing empty directories in the way of links
+        impermanenceCleanEmptyLinkTargets =
+          dag.entryBefore
+            [ "checkLinkTargets" ]
+            (mkDirScripts { filterFn = isSymlink; mapFn = mkLinkCleanup; reverse = true; });
 
-          unmountPersistentStoragePaths =
-            dag.entryBefore
-              [ "createAndMountPersistentStoragePaths" ]
-              ''
-                PATH=$PATH:/run/wrappers/bin
-                unmountBindMounts() {
-                ${mkDirScripts {filterFn = isBindfs; mapFn = mkUnmount; reverse = true; }}
-                }
+        impermanenceCreateAndMountPersistentStoragePaths =
+          dag.entryBefore
+            [ "writeBoundary" ]
+            ''
+              declare -A mountedPaths
+              bindMountErrors=()
+              ${mkDirScripts {filterFn = isBindfs; mapFn = mkBindMount; reverse = false; }}
+              test "''${#bindMountErrors[@]}" == 0
+            '';
 
-                # Run the unmount function on error to clean up stray
-                # bind mounts
-                trap "unmountBindMounts" ERR
-              '';
+        impermanenceUnmountPersistentStoragePaths =
+          dag.entryBefore
+            [ "impermanenceCreateAndMountPersistentStoragePaths" ]
+            ''
+              unmountBindMounts() {
+              ${mkDirScripts {filterFn = isBindfs; mapFn = mkUnmount; reverse = true; }}
+              }
 
-          runUnmountPersistentStoragePaths =
-            dag.entryBefore
-              [ reloadSystemd ]
-              ''
-                unmountBindMounts
-              '';
-        })
-        (mkIf (any (path: (cfg.${path}.files != [ ]) || ((filter isSymlink cfg.${path}.directories) != [ ])) persistentStorageNames) {
-          createTargetFileDirectories =
-            dag.entryBefore
-              [ "writeBoundary" ]
-              (lib.pipe (orderedFiles ++ (builtins.filter (d: isSymlink d.dir) orderedDirs)) [
-                (builtins.map ({persistentStorageName, ...}@e: lib.pipe (e.file or e.dir.directory) [
-                  dirOf
-                  (path: concatPaths [
-                    cfg.${persistentStorageName}.persistentStoragePath
-                    path
-                  ])
-                ]))
-                (builtins.sort (a: b: a < b))
-                lib.lists.unique
-                (builtins.map (path: ''mkdir -p ${escapeShellArg path}''))
-                (builtins.concatStringsSep "\n")
-              ]);
-        })
-      ];
+              # Run the unmount function on error to clean up stray
+              # bind mounts
+              trap "unmountBindMounts" ERR
+            '';
+
+        impermanenceRunUnmountPersistentStoragePaths =
+          dag.entryBefore
+            [ reloadSystemd ]
+            ''
+              unmountBindMounts
+            '';
+
+        impermanenceCreateTargetFileDirectories =
+          dag.entryBefore
+            [ "writeBoundary" ]
+            (lib.pipe (builtins.filter isSymlink (orderedFiles ++ orderedDirs)) [
+              (builtins.map (ordered: builtins.dirOf ordered.dirCfg.targetDir))
+              (builtins.sort (a: b: a < b))
+              lib.lists.unique
+              (builtins.map (path: ''${pkgs.coreutils}/bin/mkdir -p ${escapeShellArg path}''))
+              (builtins.concatStringsSep "\n")
+            ]);
+      };
   };
 
 }

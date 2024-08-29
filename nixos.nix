@@ -48,14 +48,12 @@ let
     parentsOf
     ;
 
+  scripts = pkgs.callPackage ./scripts { };
+
   cfg = config.environment.persistence;
   users = config.users.users;
   allPersistentStoragePaths = zipAttrsWith (_name: flatten) (filter (v: v.enable) (attrValues cfg));
   inherit (allPersistentStoragePaths) files directories;
-  mountFile = pkgs.runCommand "impermanence-mount-file" { buildInputs = [ pkgs.bash ]; } ''
-    cp ${./mount-file.bash} $out
-    patchShebangs $out
-  '';
 
   # Create fileSystems bind mount entry.
   mkBindMountNameValuePair = { dirPath, persistentStoragePath, hideMount, ... }: {
@@ -493,21 +491,22 @@ in
       let
         mkPersistFileService = { filePath, persistentStoragePath, enableDebugging, ... }:
           let
-            targetFile = escapeShellArg (concatPaths [ persistentStoragePath filePath ]);
+            targetFile = concatPaths [ persistentStoragePath filePath ];
             mountPoint = escapeShellArg filePath;
           in
           {
-            "persist-${escapeSystemdPath targetFile}" = {
-              description = "Bind mount or link ${targetFile} to ${mountPoint}";
+            "persist-${escapeSystemdPath (escapeShellArg targetFile)}" = {
+              description = "Bind mount or link ${escapeShellArg targetFile} to ${mountPoint}";
               wantedBy = [ "local-fs.target" ];
               before = [ "local-fs.target" ];
               path = [ pkgs.util-linux ];
               unitConfig.DefaultDependencies = false;
+              environment.DEBUG = builtins.toString enableDebugging;
               serviceConfig = {
                 Type = "oneshot";
                 RemainAfterExit = true;
-                ExecStart = "${mountFile} ${mountPoint} ${targetFile} ${escapeShellArg enableDebugging}";
-                ExecStop = pkgs.writeShellScript "unbindOrUnlink-${escapeSystemdPath targetFile}" ''
+                ExecStart = "${lib.getExe scripts.os.mount-file} ${mountPoint} ${escapeShellArg targetFile}";
+                ExecStop = pkgs.writeShellScript "unbindOrUnlink-${escapeSystemdPath (escapeShellArg targetFile)}" ''
                   set -eu
                   if [[ -L ${mountPoint} ]]; then
                       rm ${mountPoint}
@@ -528,14 +527,6 @@ in
 
     system.activationScripts =
       let
-        # Script to create directories in persistent and ephemeral
-        # storage. The directory structure's mode and ownership mirror
-        # those of persistentStoragePath/dir.
-        createDirectories = pkgs.runCommand "impermanence-create-directories" { buildInputs = [ pkgs.bash ]; } ''
-          cp ${./create-directories.bash} $out
-          patchShebangs $out
-        '';
-
         mkDirWithPerms =
           { dirPath
           , persistentStoragePath
@@ -552,11 +543,11 @@ in
               user
               group
               mode
-              enableDebugging
             ];
           in
           ''
-            ${createDirectories} ${escapeShellArgs args}
+            export DEBUG=${builtins.toString enableDebugging}
+            ${lib.getExe scripts.os.create-directories} ${escapeShellArgs args}
           '';
 
         # Build an activation script which creates all persistent
@@ -660,11 +651,10 @@ in
             args = escapeShellArgs [
               mountPoint
               targetFile
-              enableDebugging
             ];
           in
           ''
-            ${mountFile} ${args}
+            ${lib.getExe scripts.os.mount-file} ${args}
           '';
 
         persistFileScript =
@@ -676,12 +666,12 @@ in
           '';
       in
       {
-        "createPersistentStorageDirs" = {
+        "impermanenceCreatePersistentStorageDirs" = {
           deps = [ "users" "groups" ];
           text = "${dirCreationScript}";
         };
-        "persist-files" = {
-          deps = [ "createPersistentStorageDirs" ];
+        "impermanencePersistFiles" = {
+          deps = [ "impermanenceCreatePersistentStorageDirs" ];
           text = "${persistFileScript}";
         };
       };
