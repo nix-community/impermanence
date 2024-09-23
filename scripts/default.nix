@@ -8,7 +8,12 @@ let
 
   os.mount-file = pkgs.writeShellApplication {
     name = "impermanence-mount-file";
-    runtimeInputs = with pkgs; [ util-linux gnugrep ];
+    runtimeInputs = (with pkgs; [
+      util-linux
+      gnugrep
+    ]) ++ [
+      path-info
+    ];
     text = builtins.readFile ./os-mount-file.bash;
   };
   os.create-directories = pkgs.writeShellApplication {
@@ -21,16 +26,16 @@ let
     name = "impermanence-hm-unmount";
     runtimeInputs = (with pkgs; [
       fuse
-    ]) ++ (with hm; [
-      mount-info
-    ]);
+    ]) ++ [
+      path-info
+    ];
     text = builtins.readFile ./hm-unmount.bash;
   };
 
-  hm.mount-info = pkgs.writeShellApplication {
-    name = "impermanence-hm-mount-info";
+  path-info = pkgs.writeShellApplication {
+    name = "impermanence-path-info";
     runtimeInputs = with pkgs; [ util-linux gnugrep ];
-    text = builtins.readFile ./hm-mount-info.bash;
+    text = builtins.readFile ./path-info.bash;
   };
 
   hm.bind-mount-activation = pkgs.writeShellApplication {
@@ -40,9 +45,10 @@ let
       coreutils
       util-linux
     ]) ++ (with hm; [
-      mount-info
       unmount
-    ]);
+    ]) ++ [
+      path-info
+    ];
     text = ''
       PATH="${builtins.dirOf systemctl}:$PATH"
       ${builtins.readFile ./hm-bind-mount-activation.bash}
@@ -54,12 +60,14 @@ let
       bindfs
       coreutils
     ]) ++ (with hm; [
-      mount-info
       unmount
-    ]);
+    ]) ++ [
+      path-info
+    ];
     text = builtins.readFile ./hm-bind-mount-service.bash;
   };
 in
 {
   inherit os hm outputPrefix;
+  inherit path-info;
 }

@@ -12,11 +12,11 @@ targetDir="$1"
 mountPoint="$2"
 bindfsArgs=("${@:3}")
 
-eval "$(impermanence-hm-mount-info "$mountPoint" SOURCE)"
+eval "$(impermanence-path-info "$mountPoint" SOURCE)"
 
 if [[ "$IS_MOUNTPOINT" == 1 && "$IS_DEAD" == 1 ]]; then
   impermanence-hm-unmount "$mountPoint" 3 1
-  eval "$(impermanence-hm-mount-info "$mountPoint" SOURCE)"
+  eval "$(impermanence-path-info "$mountPoint" SOURCE)"
 fi
 
 if [[ "$IS_MOUNTPOINT" == 0 ]]; then

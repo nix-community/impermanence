@@ -546,8 +546,7 @@ in
             ];
           in
           ''
-            export DEBUG=${builtins.toString enableDebugging}
-            ${lib.getExe scripts.os.create-directories} ${escapeShellArgs args}
+            DEBUG=${builtins.toString enableDebugging} ${lib.getExe scripts.os.create-directories} ${escapeShellArgs args}
           '';
 
         # Build an activation script which creates all persistent

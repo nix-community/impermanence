@@ -12,7 +12,7 @@ mountPoint="$1"
 triesLeft="$2"
 sleep="$3"
 
-eval "$(impermanence-hm-mount-info "$mountPoint" SOURCE)"
+eval "$(impermanence-path-info "$mountPoint" SOURCE)"
 
 if [[ "$IS_MOUNTPOINT" == 1 ]]; then
   while ((triesLeft > 0)); do

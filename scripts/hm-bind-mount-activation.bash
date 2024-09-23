@@ -20,12 +20,12 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-"/run/user/${UID}"}"
 unmountCmd="$(command -v impermanence-hm-unmount)"
 mountpointCmd="$(command -v mountpoint)"
 
-eval "$(impermanence-hm-mount-info "$mountPoint" FSTYPE SOURCE)"
+eval "$(impermanence-path-info "$mountPoint" FSTYPE SOURCE)"
 
 if [[ "$IS_MOUNTPOINT" == 1 && "$IS_DEAD" == 1 ]]; then
   echo "seems like the process died, remounting $mountPoint..."
   "$unmountCmd" "$mountPoint" 3 1
-  eval "$(impermanence-hm-mount-info "$mountPoint" FSTYPE SOURCE)"
+  eval "$(impermanence-path-info "$mountPoint" FSTYPE SOURCE)"
 fi
 
 mkdir -p "$targetDir"

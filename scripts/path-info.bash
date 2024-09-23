@@ -30,8 +30,14 @@ done
 outputs="${outputs#,}"
 
 IS_MOUNTPOINT=0
+IS_SYMLINK=0
+IS_DEAD=0
 
-if _src="$(findmnt --output "$outputs" --shell --pairs --first-only --mountpoint "$mountPoint")"; then
+if [[ -L "$mountPoint" ]] ; then
+  # shellcheck disable=SC2034
+  IS_SYMLINK=1
+  SOURCE="$(readlink -f "$mountPoint")"
+elif _src="$(findmnt --output "$outputs" --shell --pairs --first-only --mountpoint "$mountPoint")"; then
   eval "$_src"
   # shellcheck disable=SC2034
   IS_MOUNTPOINT=1
@@ -51,7 +57,7 @@ if _src="$(findmnt --output "$outputs" --shell --pairs --first-only --mountpoint
   fi
 fi
 
-for varName in IS_DEAD IS_MOUNTPOINT "${variables[@]}"; do
+for varName in IS_DEAD IS_MOUNTPOINT IS_SYMLINK "${variables[@]}"; do
   value="${!varName:-""}"
   echo "$varName=${value@Q}"
 done
