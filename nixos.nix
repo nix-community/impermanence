@@ -6,6 +6,8 @@ let
     attrValues
     zipAttrsWith
     flatten
+    mkAfter
+    mkIf
     mkOption
     mkDefault
     mkIf
@@ -14,6 +16,7 @@ let
     types
     foldl'
     unique
+    concatMap
     concatMapStrings
     listToAttrs
     escapeShellArg
@@ -37,6 +40,7 @@ let
 
   inherit (utils)
     escapeSystemdPath
+    fsNeededForBoot
     ;
 
   inherit (pkgs.callPackage ./lib.nix { })
@@ -681,6 +685,62 @@ in
           deps = [ "createPersistentStorageDirs" ];
           text = "${persistFileScript}";
         };
+      };
+
+    # Create the mountpoints of directories marked as needed for boot
+    # which are also persisted. For this to work, it has to run at
+    # early boot, before NixOS' filesystem mounting runs. Without
+    # this, initial boot fails when for example /var/lib/nixos is
+    # persisted but not created in persistent storage.
+    boot.initrd =
+      let
+        neededForBootFs = catAttrs "mountPoint" (filter fsNeededForBoot (attrValues config.fileSystems));
+        neededForBootDirs = filter (dir: elem dir.dirPath neededForBootFs) directories;
+        mkMount = fs:
+          let
+            mountPoint = concatPaths [ "/persist-tmp-mnt" fs.mountPoint ];
+            device = if fs.device != null then fs.device else "/dev/disk/by-label/${fs.label}";
+            options = filter (o: (builtins.match "(x-.*\.mount)" o) == null) fs.options;
+            optionsFlag = optionalString (options != [ ]) ("-o " + escapeShellArg (concatStringsSep "," options));
+          in
+          ''
+            mkdir -p ${escapeShellArg mountPoint}
+            mount -t ${escapeShellArgs [ fs.fsType device mountPoint ]} ${optionsFlag}
+          '';
+        mkDir = { persistentStoragePath, dirPath, ... }: ''
+          mkdir -p ${escapeShellArg (concatPaths [ "/persist-tmp-mnt" persistentStoragePath dirPath ])}
+        '';
+        mkUnmount = fs: ''
+          umount ${escapeShellArg (concatPaths [ "/persist-tmp-mnt" fs.mountPoint ])}
+        '';
+        fileSystems =
+          let
+            persistentStoragePaths = unique (catAttrs "persistentStoragePath" directories);
+            all = config.fileSystems // config.virtualisation.fileSystems;
+            matchFileSystems = fs: attrValues (filterAttrs (_: v: v.mountPoint or null == fs) all);
+          in
+          concatMap matchFileSystems persistentStoragePaths;
+        devices =
+          map (d: "${(escapeSystemdPath d)}.device") (catAttrs "device" fileSystems);
+        createNeededForBootDirs = ''
+          ${concatMapStrings mkMount fileSystems}
+          ${concatMapStrings mkDir neededForBootDirs}
+          ${concatMapStrings mkUnmount fileSystems}
+        '';
+      in
+      {
+        systemd.services = mkIf config.boot.initrd.systemd.enable {
+          create-needed-for-boot-dirs = {
+            wantedBy = [ "initrd-root-device.target" ];
+            wants = devices;
+            after = devices;
+            before = [ "sysroot.mount" ];
+            serviceConfig.Type = "oneshot";
+            script = createNeededForBootDirs;
+          };
+        };
+        postDeviceCommands = mkIf (!config.boot.initrd.systemd.enable)
+          (mkAfter createNeededForBootDirs);
       };
 
     assertions =
