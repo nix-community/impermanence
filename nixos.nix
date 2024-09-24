@@ -7,7 +7,6 @@ let
     zipAttrsWith
     flatten
     mkAfter
-    mkIf
     mkOption
     mkDefault
     mkIf
