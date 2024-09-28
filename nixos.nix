@@ -719,8 +719,14 @@ in
             matchFileSystems = fs: attrValues (filterAttrs (_: v: v.mountPoint or null == fs) all);
           in
           concatMap matchFileSystems persistentStoragePaths;
-        devices =
-          map (d: "${(escapeSystemdPath d)}.device") (catAttrs "device" fileSystems);
+        deviceUnits = unique
+          (map
+            (fs:
+              if fs.fsType == "zfs" then
+                "zfs-import.target"
+              else
+                "${(escapeSystemdPath fs.device)}.device")
+            fileSystems);
         createNeededForBootDirs = ''
           ${concatMapStrings mkMount fileSystems}
           ${concatMapStrings mkDir neededForBootDirs}
@@ -731,10 +737,11 @@ in
         systemd.services = mkIf config.boot.initrd.systemd.enable {
           create-needed-for-boot-dirs = {
             wantedBy = [ "initrd-root-device.target" ];
-            wants = devices;
-            after = devices;
+            requires = deviceUnits;
+            after = deviceUnits;
             before = [ "sysroot.mount" ];
             serviceConfig.Type = "oneshot";
+            unitConfig.DefaultDependencies = false;
             script = createNeededForBootDirs;
           };
         };
