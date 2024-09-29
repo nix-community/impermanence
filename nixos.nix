@@ -695,10 +695,11 @@ in
       let
         neededForBootFs = catAttrs "mountPoint" (filter fsNeededForBoot (attrValues config.fileSystems));
         neededForBootDirs = filter (dir: elem dir.dirPath neededForBootFs) directories;
+        getDevice = fs: if fs.device != null then fs.device else "/dev/disk/by-label/${fs.label}";
         mkMount = fs:
           let
             mountPoint = concatPaths [ "/persist-tmp-mnt" fs.mountPoint ];
-            device = if fs.device != null then fs.device else "/dev/disk/by-label/${fs.label}";
+            device = getDevice fs;
             options = filter (o: (builtins.match "(x-.*\.mount)" o) == null) fs.options;
             optionsFlag = optionalString (options != [ ]) ("-o " + escapeShellArg (concatStringsSep "," options));
           in
@@ -725,7 +726,7 @@ in
               if fs.fsType == "zfs" then
                 "zfs-import.target"
               else
-                "${(escapeSystemdPath fs.device)}.device")
+                "${(escapeSystemdPath (getDevice fs))}.device")
             fileSystems);
         createNeededForBootDirs = ''
           ${concatMapStrings mkMount fileSystems}
