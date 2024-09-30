@@ -14,6 +14,7 @@ let
     take
     length
     last
+    escapeShellArg
     ;
   inherit (lib.strings)
     sanitizeDerivationName
@@ -37,7 +38,7 @@ let
     in
     prefix + path;
 
-
+  # "/home/user/.screenrc" -> ["/home", "/home/user"]
   parentsOf = path:
     let
       prefix = optionalString (hasPrefix "/" path) "/";
@@ -60,6 +61,7 @@ let
       [ "." ] [ "" ]
       (sanitizeDerivationName (removePrefix "/" name));
 
+  # ["a", "b", "a"] -> ["a"]
   duplicates = list:
     let
       result =
@@ -78,6 +80,10 @@ let
           list;
     in
     result.duplicates;
+
+  mkMountPath = root: child: escapeShellArg (concatPaths [ root child ]);
+
+  mkServiceName = root: child: "bindMount-${sanitizeName (mkMountPath root child)}";
 in
 {
   inherit
@@ -87,5 +93,7 @@ in
     parentsOf
     sanitizeName
     duplicates
+    mkMountPath
+    mkServiceName
     ;
 }
