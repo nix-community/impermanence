@@ -48,7 +48,7 @@ fi
 realSource="$(realpath -m "$sourceBase$target")"
 if [[ ! -d "$realSource" ]]; then
     printf "Warning: Source directory '%s' does not exist; it will be created for you with the following permissions: owner: '%s:%s', mode: '%s'.\n" "$realSource" "$user" "$group" "$mode"
-    mkdir --mode="$mode" "$realSource"
+    mkdir -p --mode="$mode" "$realSource"
     chown "$user:$group" "$realSource"
 fi
 
