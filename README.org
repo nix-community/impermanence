@@ -349,6 +349,29 @@
       }
     #+end_src
 
+    or use the provided ~homeManagerModules.impermanence~ flake output:
+
+    #+end_src
+
+    #+begin_src nix
+      {
+        inputs = {
+          impermanence.url = "github:nix-community/impermanence";
+        };
+
+        outputs = { self, nixpkgs, impermanence, ... }:
+          {
+            homeConfigurations.sythe = home-manager.lib.homeManagerConfiguration {
+            inherit pkgs;
+            modules = [
+                impermanence.homeManagerModules.impermanence
+                ./machines/sythe/home.nix
+              ];
+            };
+          };
+      }
+    #+end_src
+
     This adds the ~home.persistence~ option, which is an attribute set
     of submodules, where the attribute name is the path to persistent
     storage.
