@@ -4,7 +4,7 @@ with lib;
 let
   cfg = config.home.persistence;
 
-  persistentStorageNames = attrNames cfg;
+  persistentStorageNames = (filter (path: cfg.${path}.enable) (attrNames cfg));
 
   getDirPath = v: if isString v then v else v.directory;
   getDirMethod = v: v.method or "bindfs";
@@ -54,6 +54,12 @@ in
                   The path to persistent storage where the real
                   files and directories should be stored.
                 '';
+              };
+
+              enable = mkOption {
+                type = bool;
+                default = true;
+                description = "Whether to enable this persistent storage location.";
               };
 
               directories = mkOption {
