@@ -349,6 +349,44 @@
       }
     #+end_src
 
+    or use the provided ~homeManagerModules.impermanence~ flake output:
+
+    #+begin_src nix
+      {
+        inputs = {
+          home-manager.url = "github:nix-community/home-manager";
+          impermanence.url = "github:nix-community/impermanence";
+        };
+
+        outputs =
+          {
+            home-manager,
+            nixpkgs,
+            impermanence,
+            ...
+          }:
+          {
+            nixosConfigurations.sythe = nixpkgs.lib.nixosSystem {
+              system = "x86_64-linux";
+              modules = [
+                {
+                  imports = [ home-manager.nixosModules.home-manager ];
+
+                  home-manager.users.username =
+                    { ... }:
+                    {
+                      imports = [
+                        impermanence.homeManagerModules.impermanence
+                        ./home/impermanence.nix # Your home-manager impermanence-configuration
+                      ];
+                    };
+                }
+              ];
+            };
+          };
+      }
+    #+end_src
+
     This adds the ~home.persistence~ option, which is an attribute set
     of submodules, where the attribute name is the path to persistent
     storage.
