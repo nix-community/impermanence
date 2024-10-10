@@ -78,14 +78,50 @@ let
           list;
     in
     result.duplicates;
+
+  getHomeDirCfg = { pkgs, homeDirectory, storage }: dir:
+    let
+      dirCfg.storage = storage;
+
+      dirCfg.mountDir =
+        if dirCfg.storage.removePrefixDirectory then
+          dirListToPath (builtins.tail (splitPath [ dir ]))
+        else
+          dir;
+
+
+      dirCfg.mountPoint = concatPaths [ homeDirectory dirCfg.mountDir ];
+      dirCfg.targetDir = concatPaths [ dirCfg.storage.persistentStoragePath dir ];
+
+      dirCfg.escaped.mountPoint = lib.escapeShellArg dirCfg.mountPoint;
+      dirCfg.escaped.targetDir = lib.escapeShellArg dirCfg.targetDir;
+
+      dirCfg.sanitized.targetDir = sanitizeName dirCfg.targetDir;
+      dirCfg.sanitized.mountPoint = sanitizeName dirCfg.mountPoint;
+      dirCfg.sanitized.mountDir = sanitizeName dirCfg.mountDir;
+
+      dirCfg.unitName = "bindMount--${dirCfg.sanitized.mountDir}";
+
+      dirCfg.runBindfsArgs =
+        let
+          bindfsOptions =
+            lib.lists.optional (!dirCfg.storage.allowOther) "no-allow-other"
+            ++ lib.lists.optional (lib.versionAtLeast pkgs.bindfs.version "1.14.9") "fsname=${dirCfg.targetDir}"
+          ;
+        in
+        lib.lists.optionals (bindfsOptions != [ ]) [ "-o" (concatStringsSep "," bindfsOptions) ]
+      ;
+    in
+    dirCfg;
 in
 {
   inherit
-    splitPath
-    dirListToPath
     concatPaths
+    dirListToPath
+    duplicates
+    getHomeDirCfg
     parentsOf
     sanitizeName
-    duplicates
+    splitPath
     ;
 }
