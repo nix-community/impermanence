@@ -17,24 +17,20 @@ fi
 mountPoint="$1"
 targetFile="$2"
 
-trace() {
-  if (("$DEBUG")); then
-    echo "$@"
-  fi
-}
-
 eval "$(impermanence-path-info "$mountPoint" SOURCE)"
 
 if [[ "$IS_SYMLINK" == 1 && "$SOURCE" == "$targetFile" ]]; then
-  trace "$mountPoint already links to $targetFile, ignoring"
+  echo "$mountPoint already links to $targetFile, ignoring"
 elif [[ "$IS_MOUNTPOINT" == 1 ]]; then
-  trace "mount already exists at $mountPoint, ignoring"
+  echo "mount already exists at $mountPoint, ignoring"
 elif [[ -e "$mountPoint" ]]; then
   echo "A file already exists at $mountPoint!" >&2
   exit 1
 elif [[ -e "$targetFile" ]]; then
+  echo "Bind mounting ${targetFile} to ${mountPoint}..."
   touch "$mountPoint"
   mount -o bind "$targetFile" "$mountPoint"
 else
+  echo "Symlinking ${targetFile} to ${mountPoint}..."
   ln -s "$targetFile" "$mountPoint"
 fi
