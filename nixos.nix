@@ -105,7 +105,7 @@ in
                 options = {
                   persistentStoragePath = mkOption {
                     type = path;
-                    default = cfg.${name}.persistentStoragePath;
+                    default = config.persistentStoragePath;
                     defaultText = "environment.persistence.‹name›.persistentStoragePath";
                     description = ''
                       The path to persistent storage where the real
@@ -123,7 +123,7 @@ in
                   };
                   enableDebugging = mkOption {
                     type = bool;
-                    default = cfg.${name}.enableDebugging;
+                    default = config.enableDebugging;
                     defaultText = "environment.persistence.‹name›.enableDebugging";
                     internal = true;
                     description = ''
@@ -194,7 +194,7 @@ in
                   };
                   hideMount = mkOption {
                     type = bool;
-                    default = cfg.${name}.hideMounts;
+                    default = config.hideMounts;
                     defaultText = "environment.persistence.‹name›.hideMounts";
                     example = true;
                     description = ''
