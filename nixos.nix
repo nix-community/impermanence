@@ -780,6 +780,16 @@ in
           };
       }
 
+      # Work around an issue with persisting /etc/machine-id where the
+      # systemd-machine-id-commit.service unit fails if
+      # /etc/machine-id is bind mounted from persistent storage. For
+      # more details, see
+      # https://github.com/nix-community/impermanence/issues/229
+      (mkIf (any (f: f == "/etc/machine-id") (catAttrs "filePath" files)) {
+        boot.initrd.systemd.suppressedUnits = [ "systemd-machine-id-commit.service" ];
+        systemd.suppressedSystemUnits = [ "systemd-machine-id-commit.service" ];
+      })
+
       # Assertions and warnings
       {
         assertions =
