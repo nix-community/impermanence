@@ -10,7 +10,7 @@ shopt -s inherit_errexit  # Inherit the errexit option status in subshells.
 trap 'echo Error when executing ${BASH_COMMAND} at line ${LINENO}! >&2' ERR
 
 # Get inputs from command line arguments
-if [[ "$#" != 3 ]]; then
+if [[ $# != 3 ]]; then
     echo "Error: 'mount-file.bash' requires *three* args." >&2
     exit 1
 fi
@@ -20,22 +20,29 @@ targetFile="$2"
 debug="$3"
 
 trace() {
-    if (( "$debug" )); then
+    if (( debug )); then
       echo "$@"
     fi
 }
-if (( "$debug" )); then
+if (( debug )); then
     set -o xtrace
 fi
 
-if [[ -L "$mountPoint" && $(readlink -f "$mountPoint") == "$targetFile" ]]; then
+if [[ -L $mountPoint && $(readlink -f "$mountPoint") == "$targetFile" ]]; then
     trace "$mountPoint already links to $targetFile, ignoring"
 elif findmnt "$mountPoint" >/dev/null; then
     trace "mount already exists at $mountPoint, ignoring"
-elif [[ -s "$mountPoint" ]]; then
+elif [[ -s $mountPoint ]]; then
     echo "A file already exists at $mountPoint!" >&2
     exit 1
-elif [[ -e "$targetFile" ]]; then
+elif [[ -e $targetFile ]]; then
+    touch "$mountPoint"
+    mount -o bind "$targetFile" "$mountPoint"
+elif [[ $mountPoint == "/etc/machine-id" ]]; then
+    # Work around an issue with persisting /etc/machine-id. For more
+    # details, see https://github.com/nix-community/impermanence/pull/242
+    echo "Creating initial /etc/machine-id"
+    echo "uninitialized" > "$targetFile"
     touch "$mountPoint"
     mount -o bind "$targetFile" "$mountPoint"
 else
