@@ -38,6 +38,13 @@ elif [[ -s $mountPoint ]]; then
 elif [[ -e $targetFile ]]; then
     touch "$mountPoint"
     mount -o bind "$targetFile" "$mountPoint"
+elif [[ $mountPoint == "/etc/machine-id" ]]; then
+    # Work around an issue with persisting /etc/machine-id. For more
+    # details, see https://github.com/nix-community/impermanence/pull/242
+    echo "Creating initial /etc/machine-id"
+    echo "uninitialized" > "$targetFile"
+    touch "$mountPoint"
+    mount -o bind "$targetFile" "$mountPoint"
 else
     ln -s "$targetFile" "$mountPoint"
 fi
