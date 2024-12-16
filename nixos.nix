@@ -754,6 +754,8 @@ in
                 (fs:
                   if fs.fsType == "zfs" then
                     "zfs-import.target"
+                  else if builtins.elem "bind" fs.options then
+                    "${escapeSystemdPath fs.device}.mount"
                   else
                     "${(escapeSystemdPath (getDevice fs))}.device")
                 fileSystems);
