@@ -202,6 +202,7 @@
         environment.persistence."/persistent" = {
           enable = true;  # NB: Defaults to true, not needed
           hideMounts = true;
+          allowTrash = true;
           directories = [
             "/var/log"
             "/var/lib/bluetooth"
@@ -251,6 +252,11 @@
       bind mounts from showing up as mounted drives in the file
       manager. If enabled, it sets the mount option ~x-gvfs-hide~
       on all the bind mounts.
+
+    - ~allowTrash~ allows you to specify whether to allow apps that use
+      certain GTK-based technologies such as GIO to put items in the
+      trash. If enabled, it sets the mount option ~x-gvfs-trash~ on all
+      the bind mounts.
 
     - ~directories~ are all directories you want to bind mount to
       persistent storage. A directory can be represented either as a
