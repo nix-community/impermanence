@@ -35,6 +35,7 @@ let
     intersectLists
     any
     id
+    head
     ;
 
   inherit (utils)
@@ -43,9 +44,10 @@ let
     ;
 
   inherit (pkgs.callPackage ./lib.nix { })
+    splitPath
     concatPaths
-    duplicates
     parentsOf
+    duplicates
     ;
 
   cfg = config.environment.persistence;
@@ -724,7 +726,13 @@ in
           let
             neededForBootFs = catAttrs "mountPoint" (filter fsNeededForBoot (attrValues config.fileSystems));
             neededForBootDirs = filter (dir: elem dir.dirPath neededForBootFs) directories;
-            getDevice = fs: if fs.device != null then fs.device else "/dev/disk/by-label/${fs.label}";
+            getDevice = fs:
+              if fs.device != null then
+                fs.device
+              else if fs.label != null then
+                "/dev/disk/by-label/${fs.label}"
+              else
+                "none";
             mkMount = fs:
               let
                 mountPoint = concatPaths [ "/persist-tmp-mnt" fs.mountPoint ];
@@ -750,14 +758,24 @@ in
               in
               concatMap matchFileSystems persistentStoragePaths;
             deviceUnits = unique
-              (map
+              (concatMap
                 (fs:
-                  if fs.fsType == "zfs" then
-                    "zfs-import.target"
-                  else if builtins.elem "bind" fs.options then
-                    "${escapeSystemdPath fs.device}.mount"
+                  # If the device path starts with “dev” or “sys”,
+                  # it's a real device and should have an associated
+                  # .device unit. If not, it's probably either a
+                  # temporary file system lacking a backing device, a
+                  # ZFS pool or a bind mount.
+                  let
+                    device = getDevice fs;
+                  in
+                  if elem (head (splitPath [ device ])) [ "dev" "sys" ] then
+                    [ "${escapeSystemdPath device}.device" ]
+                  else if device == "none" || device == fs.fsType then
+                    [ ]
+                  else if fs.fsType == "zfs" then
+                    [ "zfs-import.target" ]
                   else
-                    "${(escapeSystemdPath (getDevice fs))}.device")
+                    [ "${escapeSystemdPath device}.mount" ])
                 fileSystems);
             createNeededForBootDirs = ''
               ${concatMapStrings mkMount fileSystems}
