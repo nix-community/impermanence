@@ -66,13 +66,14 @@ let
   };
 
   # Create fileSystems bind mount entry.
-  mkBindMountNameValuePair = { dirPath, persistentStoragePath, hideMount, ... }: {
+  mkBindMountNameValuePair = { dirPath, persistentStoragePath, hideMount, allowTrash, ... }: {
     name = concatPaths [ "/" dirPath ];
     value = {
       device = concatPaths [ persistentStoragePath dirPath ];
       noCheck = true;
       options = [ "bind" "X-fstrim.notrim" ]
-        ++ optional hideMount "x-gvfs-hide";
+        ++ optional hideMount "x-gvfs-hide"
+        ++ optional allowTrash "x-gvfs-trash";
       depends = [ persistentStoragePath ];
     };
   };
@@ -202,6 +203,15 @@ in
                     description = ''
                       Whether to hide bind mounts from showing up as
                       mounted drives.
+                    '';
+                  };
+                  allowTrash = mkOption {
+                    type = bool;
+                    default = config.allowTrash;
+                    defaultText = "environment.persistence.‹name›.allowTrash";
+                    example = true;
+                    description = ''
+                      Whether to allow newer GIO-based applications to trash files.
                     '';
                   };
                   # Save the default permissions at the level the
@@ -421,6 +431,14 @@ in
                     example = true;
                     description = ''
                       Whether to hide bind mounts from showing up as mounted drives.
+                    '';
+                  };
+                  allowTrash = mkOption {
+                    type = bool;
+                    default = true;
+                    example = true;
+                    description = ''
+                      Whether to allow newer GIO-based applications to trash files.
                     '';
                   };
 
