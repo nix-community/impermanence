@@ -19,17 +19,18 @@ let
     ;
 
   mount = "${pkgs.util-linux}/bin/mount";
+  fusermount = "${lib.getExe' pkgs.fuse "fusermount"}"
   unmountScript = mountPoint: tries: sleep: ''
     triesLeft=${toString tries}
     if ${mount} | grep -F ${mountPoint}' ' >/dev/null; then
         while (( triesLeft > 0 )); do
-            if fusermount -u ${mountPoint}; then
+            if ${fusermount} -u ${mountPoint}; then
                 break
             else
                 (( triesLeft-- ))
                 if (( triesLeft == 0 )); then
                     echo "Couldn't perform regular unmount of ${mountPoint}. Attempting lazy unmount."
-                    fusermount -uz ${mountPoint}
+                    ${fusermount} -uz ${mountPoint}
                 else
                     sleep ${toString sleep}
                 fi
