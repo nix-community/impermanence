@@ -19,7 +19,7 @@ let
     ;
 
   mount = "${pkgs.util-linux}/bin/mount";
-  fusermount = "${lib.getExe' pkgs.fuse "fusermount"}"
+  fusermount = "${lib.getExe' pkgs.fuse "fusermount"}";
   unmountScript = mountPoint: tries: sleep: ''
     triesLeft=${toString tries}
     if ${mount} | grep -F ${mountPoint}' ' >/dev/null; then
