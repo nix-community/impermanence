@@ -36,7 +36,7 @@ elif [[ -s $mountPoint ]]; then
     echo "A file already exists at $mountPoint!" >&2
     exit 1
 elif [[ -e $targetFile ]]; then
-    touch "$mountPoint"
+    touch -h "$mountPoint"
     mount -o bind "$targetFile" "$mountPoint"
 elif [[ $mountPoint == "/etc/machine-id" ]]; then
     # Work around an issue with persisting /etc/machine-id. For more
