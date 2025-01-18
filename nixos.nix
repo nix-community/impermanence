@@ -264,8 +264,8 @@ in
                         let
                           userDefaultPerms = {
                             inherit (defaultPerms) mode;
-                            user = name;
-                            group = users.${userDefaultPerms.user}.group;
+                            user = users.${name}.name;
+                            group = users.${name}.group;
                           };
                           fileConfig =
                             { config, ... }:
@@ -593,7 +593,7 @@ in
                           home = null;
                           mode = "0700";
                           user = dir.user;
-                          group = users.${dir.user}.group;
+                          group = dir.group;
                           inherit defaultPerms;
                           inherit (dir) persistentStoragePath enableDebugging;
                         };
