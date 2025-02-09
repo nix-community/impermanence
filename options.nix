@@ -167,6 +167,93 @@ let
       dirPath = mkDefault config.directory;
     })
   ] ++ (mapAttrsToList (n: v: { ${n} = mkDefault v; }) defaultPerms));
+
+  userOpts =
+    { user, config, ... }:
+    let
+      userDefaultPerms = {
+        inherit (defaultPerms) mode;
+        inherit user;
+        group = users.${user}.group;
+      };
+      userFile = submodule [
+        commonOpts
+        fileOpts
+        { inherit (config) home; }
+        {
+          parentDirectory = mkDefault userDefaultPerms;
+        }
+        ({ config, ... }: {
+          parentDirectory = rec {
+            directory = dirOf config.file;
+            dirPath = concatPaths [ config.home directory ];
+            inherit (config) persistentStoragePath home;
+            defaultPerms = userDefaultPerms;
+          };
+          filePath = concatPaths [ config.home config.file ];
+        })
+      ];
+      userDir = submodule ([
+        commonOpts
+        dirOpts
+        { inherit (config) home; }
+        ({ config, ... }: {
+          defaultPerms = mkDefault userDefaultPerms;
+          dirPath = concatPaths [ config.home config.directory ];
+        })
+      ] ++ (mapAttrsToList (n: v: { ${n} = mkDefault v; }) userDefaultPerms));
+    in
+    {
+      options =
+        {
+          # Needed because defining fileSystems
+          # based on values from users.users
+          # results in infinite recursion.
+          home = mkOption {
+            type = path;
+            default = "/home/${userDefaultPerms.user}";
+            defaultText = "/home/<username>";
+            description = ''
+              The user's home directory. Only
+              useful for users with a custom home
+              directory path.
+
+              Cannot currently be automatically
+              deduced due to a limitation in
+              nixpkgs.
+            '';
+          };
+
+          files = mkOption {
+            type = listOf (coercedTo str (f: { file = f; }) userFile);
+            default = [ ];
+            example = [
+              ".screenrc"
+            ];
+            description = ''
+              Files that should be stored in
+              persistent storage.
+            '';
+          };
+
+          directories = mkOption {
+            type = listOf (coercedTo str (d: { directory = d; }) userDir);
+            default = [ ];
+            example = [
+              "Downloads"
+              "Music"
+              "Pictures"
+              "Documents"
+              "Videos"
+            ];
+            description = ''
+              Directories to bind mount to
+              persistent storage.
+            '';
+          };
+        };
+    };
+
 in
 {
   systemOpts = {
@@ -189,100 +276,16 @@ in
         };
 
         users = mkOption {
-          type = attrsOf (
-            submodule (
-              { name, config, ... }:
-              let
-                userDefaultPerms = {
-                  inherit (defaultPerms) mode;
+          type = attrsOf
+            (
+              submodule (
+                { name, config, ... }:
+                userOpts {
+                  inherit config;
                   user = name;
-                  group = users.${userDefaultPerms.user}.group;
-                };
-                fileConfig =
-                  { config, ... }:
-                  {
-                    parentDirectory = rec {
-                      directory = dirOf config.file;
-                      dirPath = concatPaths [ config.home directory ];
-                      inherit (config) persistentStoragePath home;
-                      defaultPerms = userDefaultPerms;
-                    };
-                    filePath = concatPaths [ config.home config.file ];
-                  };
-                userFile = submodule [
-                  commonOpts
-                  fileOpts
-                  { inherit (config) home; }
-                  {
-                    parentDirectory = mkDefault userDefaultPerms;
-                  }
-                  fileConfig
-                ];
-                dirConfig =
-                  { config, ... }:
-                  {
-                    defaultPerms = mkDefault userDefaultPerms;
-                    dirPath = concatPaths [ config.home config.directory ];
-                  };
-                userDir = submodule ([
-                  commonOpts
-                  dirOpts
-                  { inherit (config) home; }
-                  dirConfig
-                ] ++ (mapAttrsToList (n: v: { ${n} = mkDefault v; }) userDefaultPerms));
-              in
-              {
-                options =
-                  {
-                    # Needed because defining fileSystems
-                    # based on values from users.users
-                    # results in infinite recursion.
-                    home = mkOption {
-                      type = path;
-                      default = "/home/${userDefaultPerms.user}";
-                      defaultText = "/home/<username>";
-                      description = ''
-                        The user's home directory. Only
-                        useful for users with a custom home
-                        directory path.
-
-                        Cannot currently be automatically
-                        deduced due to a limitation in
-                        nixpkgs.
-                      '';
-                    };
-
-                    files = mkOption {
-                      type = listOf (coercedTo str (f: { file = f; }) userFile);
-                      default = [ ];
-                      example = [
-                        ".screenrc"
-                      ];
-                      description = ''
-                        Files that should be stored in
-                        persistent storage.
-                      '';
-                    };
-
-                    directories = mkOption {
-                      type = listOf (coercedTo str (d: { directory = d; }) userDir);
-                      default = [ ];
-                      example = [
-                        "Downloads"
-                        "Music"
-                        "Pictures"
-                        "Documents"
-                        "Videos"
-                      ];
-                      description = ''
-                        Directories to bind mount to
-                        persistent storage.
-                      '';
-                    };
-                  };
-              }
-            )
-          );
+                }
+              )
+            );
           default = { };
           description = ''
             A set of user submodules listing the files and
