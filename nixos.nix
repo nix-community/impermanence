@@ -35,6 +35,15 @@ let
     head
     ;
 
+  inherit (types)
+    attrsOf
+    submodule
+    ;
+
+  inherit (lib.modules)
+    importApply
+    ;
+
   inherit (utils)
     escapeSystemdPath
     fsNeededForBoot
@@ -84,17 +93,83 @@ in
     environment.persistence = mkOption {
       default = { };
       type =
-        let
-          inherit (types)
-            attrsOf
-            submodule
-            ;
-        in
         attrsOf (
-          submodule (
-            { name, config, ... }:
-            (pkgs.callPackage ./options.nix { inherit name config users; }).systemOpts
-          )
+          submodule [
+            ({ name, config, ... }:
+              (importApply ./options.nix {
+                inherit pkgs lib name config;
+                user = "root";
+                group = "root";
+                homeDir = null;
+              }))
+            ({ name, config, ... }:
+              {
+                options = {
+                  users =
+                    let
+                      outerName = name;
+                      outerConfig = config;
+                    in
+                    mkOption {
+                      type = attrsOf (
+                        submodule (
+                          { name, config, ... }:
+                          importApply ./options.nix {
+                            inherit pkgs lib;
+                            config = outerConfig // config;
+                            name = outerName;
+                            usersOpts = true;
+                            user = name;
+                            group = users.${name}.group;
+                          }
+                        )
+                      );
+                      default = { };
+                      description = ''
+                        A set of user submodules listing the files and
+                        directories to link to their respective user's
+                        home directories.
+
+                        Each attribute name should be the name of the
+                        user.
+
+                        For detailed usage, check the <link
+                        xlink:href="https://github.com/nix-community/impermanence">documentation</link>.
+                      '';
+                      example = literalExpression ''
+                        {
+                          talyz = {
+                            directories = [
+                              "Downloads"
+                              "Music"
+                              "Pictures"
+                              "Documents"
+                              "Videos"
+                              "VirtualBox VMs"
+                              { directory = ".gnupg"; mode = "0700"; }
+                              { directory = ".ssh"; mode = "0700"; }
+                              { directory = ".nixops"; mode = "0700"; }
+                              { directory = ".local/share/keyrings"; mode = "0700"; }
+                              ".local/share/direnv"
+                            ];
+                            files = [
+                              ".screenrc"
+                            ];
+                          };
+                        }
+                      '';
+                    };
+                };
+                config =
+                  let
+                    allUsers = zipAttrsWith (_name: flatten) (attrValues config.users);
+                  in
+                  {
+                    files = allUsers.files or [ ];
+                    directories = allUsers.directories or [ ];
+                  };
+              })
+          ]
         );
       description = ''
         A set of persistent storage location submodules listing the

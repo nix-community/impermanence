@@ -1,15 +1,20 @@
-{ pkgs, lib, name, config, users, ... }:
+{ pkgs
+, lib
+, name
+, config
+, usersOpts ? false  # Are the options used as users.<username> submodule options?
+, user               # Default user name
+, group              # Default user group
+}:
 let
   inherit (lib)
-    attrValues
-    zipAttrsWith
-    flatten
     mkOption
     mkDefault
+    mkIf
     mapAttrsToList
     types
-    literalExpression
     mapAttrs
+    optionalAttrs
     ;
 
   inherit (pkgs.callPackage ./lib.nix { })
@@ -17,7 +22,6 @@ let
     ;
 
   inherit (types)
-    attrsOf
     bool
     listOf
     submodule
@@ -29,8 +33,7 @@ let
 
   defaultPerms = {
     mode = "0755";
-    user = "root";
-    group = "root";
+    inherit user group;
   };
 
   commonOpts = {
@@ -146,118 +149,73 @@ let
       };
     } // dirPermsOpts;
   };
-  rootFile = submodule [
+  file = submodule [
     commonOpts
     fileOpts
-    ({ config, ... }: {
-      parentDirectory = mkDefault (defaultPerms // rec {
+    (mkIf usersOpts { inherit (config) home; })
+    {
+      parentDirectory = mkDefault defaultPerms;
+    }
+    ({ config, ... }:
+      let
+        home = if config.home != null then config.home else "/";
         directory = dirOf config.file;
-        dirPath = directory;
-        inherit (config) persistentStoragePath;
-        inherit defaultPerms;
-      });
-      filePath = mkDefault config.file;
-    })
+      in
+      {
+        parentDirectory = {
+          dirPath = concatPaths [ home directory ];
+          inherit directory defaultPerms home;
+          inherit (config) persistentStoragePath;
+        };
+        filePath = concatPaths [ home config.file ];
+      })
   ];
-  rootDir = submodule ([
+  dir = submodule ([
     commonOpts
     dirOpts
-    ({ config, ... }: {
-      defaultPerms = mkDefault defaultPerms;
-      dirPath = mkDefault config.directory;
-    })
+    (mkIf usersOpts { inherit (config) home; })
+    ({ config, ... }:
+      let
+        home = if config.home != null then config.home else "/";
+      in
+      {
+        defaultPerms = mkDefault defaultPerms;
+        dirPath = concatPaths [ home config.directory ];
+      })
   ] ++ (mapAttrsToList (n: v: { ${n} = mkDefault v; }) defaultPerms));
-
-  userOpts =
-    { user, config, ... }:
-    let
-      userDefaultPerms = {
-        inherit (defaultPerms) mode;
-        inherit user;
-        group = users.${user}.group;
-      };
-      userFile = submodule [
-        commonOpts
-        fileOpts
-        { inherit (config) home; }
-        {
-          parentDirectory = mkDefault userDefaultPerms;
-        }
-        ({ config, ... }: {
-          parentDirectory = rec {
-            directory = dirOf config.file;
-            dirPath = concatPaths [ config.home directory ];
-            inherit (config) persistentStoragePath home;
-            defaultPerms = userDefaultPerms;
-          };
-          filePath = concatPaths [ config.home config.file ];
-        })
-      ];
-      userDir = submodule ([
-        commonOpts
-        dirOpts
-        { inherit (config) home; }
-        ({ config, ... }: {
-          defaultPerms = mkDefault userDefaultPerms;
-          dirPath = concatPaths [ config.home config.directory ];
-        })
-      ] ++ (mapAttrsToList (n: v: { ${n} = mkDefault v; }) userDefaultPerms));
-    in
-    {
-      options =
-        {
-          # Needed because defining fileSystems
-          # based on values from users.users
-          # results in infinite recursion.
-          home = mkOption {
-            type = path;
-            default = "/home/${userDefaultPerms.user}";
-            defaultText = "/home/<username>";
-            description = ''
-              The user's home directory. Only
-              useful for users with a custom home
-              directory path.
-
-              Cannot currently be automatically
-              deduced due to a limitation in
-              nixpkgs.
-            '';
-          };
-
-          files = mkOption {
-            type = listOf (coercedTo str (f: { file = f; }) userFile);
-            default = [ ];
-            example = [
-              ".screenrc"
-            ];
-            description = ''
-              Files that should be stored in
-              persistent storage.
-            '';
-          };
-
-          directories = mkOption {
-            type = listOf (coercedTo str (d: { directory = d; }) userDir);
-            default = [ ];
-            example = [
-              "Downloads"
-              "Music"
-              "Pictures"
-              "Documents"
-              "Videos"
-            ];
-            description = ''
-              Directories to bind mount to
-              persistent storage.
-            '';
-          };
-        };
-    };
 
 in
 {
-  systemOpts = {
-    options =
+  options =
+    {
+      files = mkOption {
+        type = listOf (coercedTo str (f: { file = f; }) file);
+        default = [ ];
+        example = [
+          "/etc/machine-id"
+          "/etc/nix/id_rsa"
+        ];
+        description = ''
+          Files that should be stored in persistent storage.
+        '';
+      };
+
+      directories = mkOption {
+        type = listOf (coercedTo str (d: { directory = d; }) dir);
+        default = [ ];
+        example = [
+          "/var/log"
+          "/var/lib/bluetooth"
+          "/var/lib/nixos"
+          "/var/lib/systemd/coredump"
+          "/etc/NetworkManager/system-connections"
+        ];
+        description = ''
+          Directories to bind mount to persistent storage.
+        '';
+      };
+    } //
+    optionalAttrs (!usersOpts)
       {
         enable = mkOption {
           type = bool;
@@ -272,80 +230,6 @@ in
           description = ''
             The path to persistent storage where the real
             files and directories should be stored.
-          '';
-        };
-
-        users = mkOption {
-          type = attrsOf
-            (
-              submodule (
-                { name, config, ... }:
-                userOpts {
-                  inherit config;
-                  user = name;
-                }
-              )
-            );
-          default = { };
-          description = ''
-            A set of user submodules listing the files and
-            directories to link to their respective user's
-            home directories.
-
-            Each attribute name should be the name of the
-            user.
-
-            For detailed usage, check the <link
-            xlink:href="https://github.com/nix-community/impermanence">documentation</link>.
-          '';
-          example = literalExpression ''
-            {
-              talyz = {
-                directories = [
-                  "Downloads"
-                  "Music"
-                  "Pictures"
-                  "Documents"
-                  "Videos"
-                  "VirtualBox VMs"
-                  { directory = ".gnupg"; mode = "0700"; }
-                  { directory = ".ssh"; mode = "0700"; }
-                  { directory = ".nixops"; mode = "0700"; }
-                  { directory = ".local/share/keyrings"; mode = "0700"; }
-                  ".local/share/direnv"
-                ];
-                files = [
-                  ".screenrc"
-                ];
-              };
-            }
-          '';
-        };
-
-        files = mkOption {
-          type = listOf (coercedTo str (f: { file = f; }) rootFile);
-          default = [ ];
-          example = [
-            "/etc/machine-id"
-            "/etc/nix/id_rsa"
-          ];
-          description = ''
-            Files that should be stored in persistent storage.
-          '';
-        };
-
-        directories = mkOption {
-          type = listOf (coercedTo str (d: { directory = d; }) rootDir);
-          default = [ ];
-          example = [
-            "/var/log"
-            "/var/lib/bluetooth"
-            "/var/lib/nixos"
-            "/var/lib/systemd/coredump"
-            "/etc/NetworkManager/system-connections"
-          ];
-          description = ''
-            Directories to bind mount to persistent storage.
           '';
         };
 
@@ -376,14 +260,24 @@ in
             Enable non-critical warnings.
           '';
         };
+      } //
+    optionalAttrs usersOpts {
+      # Needed because defining fileSystems
+      # based on values from users.users
+      # results in infinite recursion.
+      home = mkOption {
+        type = path;
+        default = "/home/${user}";
+        defaultText = "/home/<username>";
+        description = ''
+          The user's home directory. Only
+          useful for users with a custom home
+          directory path.
+
+          Cannot currently be automatically
+          deduced due to a limitation in
+          nixpkgs.
+        '';
       };
-    config =
-      let
-        allUsers = zipAttrsWith (_name: flatten) (attrValues config.users);
-      in
-      {
-        files = allUsers.files or [ ];
-        directories = allUsers.directories or [ ];
-      };
-  };
+    };
 }
