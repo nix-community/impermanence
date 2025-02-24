@@ -96,7 +96,7 @@ in
         attrsOf (
           submodule [
             ({ name, config, ... }:
-              (importApply ./options.nix {
+              (importApply ./submodule-options.nix {
                 inherit pkgs lib name config;
                 user = "root";
                 group = "root";
@@ -114,7 +114,7 @@ in
                       type = attrsOf (
                         submodule (
                           { name, config, ... }:
-                          importApply ./options.nix {
+                          importApply ./submodule-options.nix {
                             inherit pkgs lib;
                             config = outerConfig // config;
                             name = outerName;
