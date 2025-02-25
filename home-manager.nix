@@ -1,10 +1,40 @@
 { pkgs, config, lib, ... }:
 
-with lib;
 let
-  cfg = config.home.persistence;
+  inherit (lib)
+    attrNames
+    mkOption
+    mkIf
+    mkMerge
+    types
+    foldl'
+    concatMapStrings
+    listToAttrs
+    escapeShellArg
+    recursiveUpdate
+    filter
+    concatStringsSep
+    optional
+    optionalString
+    literalExpression
+    any
+    tail
+    versionAtLeast
+    makeBinPath
+    warn
+    ;
 
-  persistentStorageNames = (filter (path: cfg.${path}.enable) (attrNames cfg));
+  inherit (types)
+    attrsOf
+    listOf
+    submodule
+    path
+    bool
+    str
+    enum
+    coercedTo
+    nullOr
+    ;
 
   inherit (pkgs.callPackage ./lib.nix { })
     splitPath
@@ -12,6 +42,10 @@ let
     concatPaths
     sanitizeName
     ;
+
+  cfg = config.home.persistence;
+
+  persistentStorageNames = (filter (path: cfg.${path}.enable) (attrNames cfg));
 
   mount = "${pkgs.util-linux}/bin/mount";
   unmountScript = mountPoint: tries: sleep: ''
@@ -38,7 +72,7 @@ in
 
     home.persistence = mkOption {
       default = { };
-      type = with types; attrsOf (
+      type = attrsOf (
         submodule ({ name, config, ... }: {
           options =
             {
@@ -58,7 +92,7 @@ in
               };
 
               defaultDirectoryMethod = mkOption {
-                type = types.enum [ "bindfs" "symlink" ];
+                type = enum [ "bindfs" "symlink" ];
                 default = "bindfs";
                 description = ''
                   The linking method that should be used for directories.
@@ -76,15 +110,15 @@ in
               };
 
               directories = mkOption {
-                type = types.listOf (
-                  types.coercedTo types.str (directory: { inherit directory; }) (submodule {
+                type = listOf (
+                  coercedTo str (directory: { inherit directory; }) (submodule {
                     options = {
                       directory = mkOption {
                         type = str;
                         description = "The directory path to be linked.";
                       };
                       method = mkOption {
-                        type = types.enum [ "bindfs" "symlink" ];
+                        type = enum [ "bindfs" "symlink" ];
                         default = config.defaultDirectoryMethod;
                         description = ''
                           The linking method to be used for this specific
@@ -121,7 +155,7 @@ in
               };
 
               files = mkOption {
-                type = with types; listOf str;
+                type = listOf str;
                 default = [ ];
                 example = [
                   ".screenrc"
@@ -133,7 +167,7 @@ in
               };
 
               allowOther = mkOption {
-                type = with types; nullOr bool;
+                type = nullOr bool;
                 default = null;
                 example = true;
                 apply = x:
@@ -157,7 +191,7 @@ in
               };
 
               removePrefixDirectory = mkOption {
-                type = types.bool;
+                type = bool;
                 default = false;
                 example = true;
                 description = ''
