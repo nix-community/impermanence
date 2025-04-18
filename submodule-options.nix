@@ -2,6 +2,7 @@
 , lib
 , name
 , config
+, homeDir
 , usersOpts ? false  # Are the options used as users.<username> submodule options?
 , user               # Default user name
 , group              # Default user group
@@ -152,7 +153,7 @@ let
   file = submodule [
     commonOpts
     fileOpts
-    (mkIf usersOpts { inherit (config) home; })
+    (mkIf (homeDir != null) { home = homeDir; })
     {
       parentDirectory = mkDefault defaultPerms;
     }
@@ -173,7 +174,7 @@ let
   dir = submodule ([
     commonOpts
     dirOpts
-    (mkIf usersOpts { inherit (config) home; })
+    (mkIf (homeDir != null) { home = homeDir; })
     ({ config, ... }:
       let
         home = if config.home != null then config.home else "/";
@@ -260,24 +261,5 @@ in
             Enable non-critical warnings.
           '';
         };
-      } //
-    optionalAttrs usersOpts {
-      # Needed because defining fileSystems
-      # based on values from users.users
-      # results in infinite recursion.
-      home = mkOption {
-        type = path;
-        default = "/home/${user}";
-        defaultText = "/home/<username>";
-        description = ''
-          The user's home directory. Only
-          useful for users with a custom home
-          directory path.
-
-          Cannot currently be automatically
-          deduced due to a limitation in
-          nixpkgs.
-        '';
-      };
     };
 }

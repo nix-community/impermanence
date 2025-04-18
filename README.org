@@ -322,11 +322,6 @@
       submodule work like their root counterparts, but the paths are
       automatically prefixed with with the user's home directory.
 
-      If the user has a non-standard home directory (i.e. not
-      ~/home/<username>~), the ~users.<username>.home~ option has to be
-      set to this path - it can't currently be automatically deduced
-      due to a limitation in ~nixpkgs~.
-
     /Important note:/ Make sure your persistent volumes are marked with
     ~neededForBoot~, otherwise you will run into problems.
 
