@@ -482,7 +482,8 @@ in
                 config.fileSystems.${fs}.neededForBoot == cond
               else
                 cond;
-            persistentStoragePaths = attrNames cfg;
+
+            persistentStoragePaths = unique (catAttrs "persistentStoragePath" (files ++ directories));
           in
           [
             {
