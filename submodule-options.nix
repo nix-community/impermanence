@@ -15,7 +15,9 @@ let
     mapAttrsToList
     types
     mapAttrs
+    optionals
     optionalAttrs
+    mkRemovedOptionModule
     ;
 
   inherit (pkgs.callPackage ./lib.nix { })
@@ -30,6 +32,7 @@ let
     path
     str
     coercedTo
+    unspecified
     ;
 
   defaultPerms = {
@@ -53,8 +56,8 @@ let
         default = null;
         internal = true;
         description = ''
-          The path to the home directory the file is
-          placed within.
+          The path to the home directory the file or
+          directory is placed within.
         '';
       };
       enableDebugging = mkOption {
@@ -68,6 +71,11 @@ let
           to.
         '';
       };
+      assertions = mkOption {
+        type = listOf unspecified;
+        internal = true;
+        default = [ ];
+      };
     };
   };
   dirPermsOpts = {
@@ -80,7 +88,7 @@ let
       '';
     };
     group = mkOption {
-      type = str;
+      type = nullOr str;
       description = ''
         If the directory doesn't exist in persistent
         storage it will be created and owned by the
@@ -174,6 +182,17 @@ let
   dir = submodule ([
     commonOpts
     dirOpts
+    {
+      imports = [
+        (mkRemovedOptionModule
+          [ "method" ]
+          ''
+            ▹ persistence."${name}":
+                As real bind mounts are now used instead of bindfs, changing the directory linking
+                method is deprecated.
+          '')
+      ];
+    }
     (mkIf (homeDir != null) { home = homeDir; })
     ({ config, ... }:
       let
@@ -187,6 +206,28 @@ let
 
 in
 {
+  imports = optionals (!usersOpts) [
+    (mkRemovedOptionModule
+      [ "allowOther" ]
+      ''
+        ▹ persistence."${name}":
+            As real bind mounts are now used instead of bindfs, `allowOther' is no longer needed.
+      '')
+    (mkRemovedOptionModule
+      [ "removePrefixDirectory" ]
+      ''
+        ▹ persistence."${name}":
+            The use of prefix directories is deprecated and the functionality has been removed.
+            If you depend on this functionality, use the `home-manager-v1' branch.
+      '')
+    (mkRemovedOptionModule
+      [ "defaultDirectoryMethod" ]
+      ''
+        ▹ persistence."${name}":
+            As real bind mounts are now used instead of bindfs, changing the default directory linking
+            method is deprecated.
+      '')
+  ];
   options =
     {
       files = mkOption {
@@ -261,5 +302,11 @@ in
             Enable non-critical warnings.
           '';
         };
-    };
+
+        assertions = mkOption {
+          type = listOf unspecified;
+          internal = true;
+          default = [ ];
+        };
+      };
 }

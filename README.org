@@ -158,7 +158,7 @@
 
 * Module usage
 
-  There are currently two modules: one for ~NixOS~ and one for ~home-manager~.
+  There are currently two modules: one for NixOS and one for Home Manager.
 
 *** NixOS
 
@@ -252,6 +252,7 @@
       manager. If enabled, it sets the mount option ~x-gvfs-hide~
       on all the bind mounts.
 
+    #+NAME: directories
     - ~directories~ are all directories you want to bind mount to
       persistent storage. A directory can be represented either as a
       string, simply denoting its path, or as a submodule. The
@@ -289,6 +290,7 @@
         permissions. Changing this once the directory has been created
         has no effect.
 
+    #+NAME: files
     - ~files~ are all files you want to link or bind to persistent
       storage. A file can be represented either as a string, simply
       denoting its path, or as a submodule. The submodule
@@ -325,22 +327,34 @@
     /Important note:/ Make sure your persistent volumes are marked with
     ~neededForBoot~, otherwise you will run into problems.
 
-*** home-manager
+*** Home Manager
 
-    Usage of the ~home-manager~ module is very similar to the one of the
-    ~NixOS~ module - the key differences are that the ~persistence~ option
-    is now under ~home~, rather than ~environment~, and the addition of
-    the submodule option ~removePrefixDirectory~.
+    The usage of the Home Manager module is very similar to the one of
+    the NixOS module - the key difference is that the ~persistence~
+    option is now under ~home~, rather than ~environment~.
 
-    /Important note:/ You have to use the ~home-manager~ ~NixOS~ module (in
-    the ~nixos~ directory of ~home-manager~'s repo) in order for this
-    module to work as intended.
+    /Important note:/ You have to use the Home Manager NixOS module (in
+    the ~nixos~ directory of Home Manager's repo) *and* the NixOS
+    ~persistence~ module in order for this module to work as intended.
 
     To use the module, import it into your configuration with
 
     #+begin_src nix
       {
-        imports = [ /path/to/impermanence/home-manager.nix ];
+        imports = [
+          /path/to/home-manager/nixos
+          /path/to/impermanence/nixos.nix
+        ];
+
+        home-manager.users.bird =
+          { ... }:
+          {
+            imports = [
+              /path/to/impermanence/home-manager.nix
+              ./home/config.nix # The rest of your Home Manager
+                                # configuration
+            ];
+          };
       }
     #+end_src
 
@@ -365,14 +379,18 @@
               system = "x86_64-linux";
               modules = [
                 {
-                  imports = [ home-manager.nixosModules.home-manager ];
+                  imports = [
+                    impermanence.nixosModules.impermanence
+                    home-manager.nixosModules.home-manager
+                  ];
 
-                  home-manager.users.username =
+                  home-manager.users.bird =
                     { ... }:
                     {
                       imports = [
                         impermanence.homeManagerModules.impermanence
-                        ./home/impermanence.nix # Your home-manager impermanence-configuration
+                        ./home/config.nix # The rest of your Home Manager
+                                          # configuration
                       ];
                     };
                 }
@@ -390,7 +408,7 @@
 
     #+begin_src nix
       {
-        home.persistence."/persistent/home/talyz" = {
+        home.persistence."/persistent" = {
           directories = [
             "Downloads"
             "Music"
@@ -398,62 +416,25 @@
             "Documents"
             "Videos"
             "VirtualBox VMs"
-            ".gnupg"
-            ".ssh"
-            ".nixops"
-            ".local/share/keyrings"
+            { directory = ".gnupg"; mode = "0700"; }
+            { directory = ".ssh"; mode = "0700"; }
+            { directory = ".nixops"; mode = "0700"; }
+            { directory = ".local/share/keyrings"; mode = "0700"; }
             ".local/share/direnv"
-            {
-              directory = ".local/share/Steam";
-              method = "symlink";
-            }
           ];
           files = [
             ".screenrc"
           ];
-          allowOther = true;
         };
       }
     #+end_src
 
-    - ~"/persistent/home/talyz"~ is the path to your persistent storage location
-    - ~directories~ are all directories you want to link to persistent storage
-        - It is possible to switch the linking ~method~ between bindfs (the
-          default) and symbolic links.
-    - ~files~ are all files you want to link to persistent storage. These are
-      symbolic links to their target location.
-    - ~allowOther~ allows other users, such as ~root~, to access files
-      through the bind mounted directories listed in
-      ~directories~. Useful for ~sudo~ operations, Docker, etc. Requires
-      the NixOS configuration ~programs.fuse.userAllowOther = true~.
-
-    Additionally, the ~home-manager~ module allows for compatibility
-    with ~dotfiles~ repos structured for use with [[https://www.gnu.org/software/stow/][GNU Stow]], where the
-    files linked to are one level deeper than where they should end
-    up. This can be achieved by setting ~removePrefixDirectory~ to ~true~:
-
-    #+begin_src nix
-      {
-        home.persistence."/etc/nixos/home-talyz-nixpkgs/dotfiles" = {
-          removePrefixDirectory = true;
-          files = [
-            "screen/.screenrc"
-          ];
-          directories = [
-            "fish/.config/fish"
-          ];
-        };
-      }
-    #+end_src
-
-    In the example, the ~.screenrc~ file and ~.config/fish~ directory
-    should be linked to from the home directory; ~removePrefixDirectory~
-    removes the first part of the path when deciding where to put the
-    links.
-
-    /Note:/ When using ~bindfs~ fuse filesystem for directories, the names of
-    the directories you add will be visible in the ~/etc/mtab~ file and in the
-    output of ~mount~ to all users.
+    - ~"/persistent"~ is the path to your persistent storage location.
+    - ~directories~ are all directories you want to bind mount to
+      persistent storage. See [[directories][the NixOS module directories section]] for
+      more details.
+    - ~files~ are all files you want to link or bind to persistent
+      storage. See [[files][the NixOS module files section]] for more details.
 
 ** Further reading
    The following blog posts provide more information on the concept of ephemeral
