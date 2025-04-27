@@ -83,7 +83,8 @@ let
     zipAttrsWith (_: flatten) (nixos ++ nixosUsers ++ homeManager);
 
   inherit (allPersistentStoragePaths) files directories;
-  mountFile = pkgs.runCommand "impermanence-mount-file" { buildInputs = [ pkgs.bash ]; } ''
+
+  mountFile = pkgs.runCommand "persistence-mount-file" { buildInputs = [ pkgs.bash ]; } ''
     cp ${./mount-file.bash} $out
     patchShebangs $out
   '';
@@ -286,7 +287,7 @@ in
                 # Script to create directories in persistent and ephemeral
                 # storage. The directory structure's mode and ownership mirror
                 # those of persistentStoragePath/dir.
-                createDirectories = pkgs.runCommand "impermanence-create-directories" { buildInputs = [ pkgs.bash ]; } ''
+                createDirectories = pkgs.runCommand "persistence-create-directories" { buildInputs = [ pkgs.bash ]; } ''
                   cp ${./create-directories.bash} $out
                   patchShebangs $out
                 '';
@@ -428,7 +429,7 @@ in
                       ++ parentDirs
                       ++ explicitDirs;
                   in
-                  pkgs.writeShellScript "impermanence-run-create-directories" ''
+                  pkgs.writeShellScript "persistence-run-create-directories" ''
                     _status=0
                     trap "_status=1" ERR
                     ${concatMapStrings mkDirWithPerms allDirs}
@@ -450,7 +451,7 @@ in
                   '';
 
                 persistFileScript =
-                  pkgs.writeShellScript "impermanence-persist-files" ''
+                  pkgs.writeShellScript "persistence-persist-files" ''
                     _status=0
                     trap "_status=1" ERR
                     ${concatMapStrings mkPersistFile files}
