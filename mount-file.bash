@@ -10,14 +10,15 @@ shopt -s inherit_errexit  # Inherit the errexit option status in subshells.
 trap 'echo Error when executing ${BASH_COMMAND} at line ${LINENO}! >&2' ERR
 
 # Get inputs from command line arguments
-if [[ $# != 3 ]]; then
-    echo "Error: 'mount-file.bash' requires *three* args." >&2
+if [[ $# != 4 ]]; then
+    echo "Error: 'mount-file.bash' requires *four* args." >&2
     exit 1
 fi
 
 mountPoint="$1"
 targetFile="$2"
-debug="$3"
+method="$3"
+debug="$4"
 
 trace() {
     if (( debug )); then
@@ -35,10 +36,10 @@ elif findmnt "$mountPoint" >/dev/null; then
 elif [[ -s $mountPoint ]]; then
     echo "A file already exists at $mountPoint!" >&2
     exit 1
-elif [[ -e $targetFile ]]; then
+elif [[ $method == "auto" && -e $targetFile ]]; then
     touch "$mountPoint"
     mount -o bind "$targetFile" "$mountPoint"
-elif [[ $mountPoint == "/etc/machine-id" ]]; then
+elif [[ $method == "auto" && $mountPoint == "/etc/machine-id" ]]; then
     # Work around an issue with persisting /etc/machine-id. For more
     # details, see https://github.com/nix-community/impermanence/pull/242
     echo "Creating initial /etc/machine-id"

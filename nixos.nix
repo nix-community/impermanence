@@ -89,13 +89,14 @@ let
     patchShebangs $out
   '';
 
-  mkPersistFile = { filePath, persistentStoragePath, enableDebugging, ... }:
+  mkPersistFile = { filePath, persistentStoragePath, method, enableDebugging, ... }:
     let
       mountPoint = filePath;
       targetFile = concatPaths [ persistentStoragePath filePath ];
       args = escapeShellArgs [
         mountPoint
         targetFile
+        method
         enableDebugging
       ];
     in

@@ -30,6 +30,7 @@ let
     submodule
     nullOr
     path
+    enum
     str
     coercedTo
     unspecified
@@ -122,6 +123,16 @@ let
             else
               x)
           dirOpts.options;
+      method = mkOption {
+        type = enum [ "auto" "symlink" ];
+        default = "auto";
+        description = ''
+          The method used to link to the target file.
+          `auto' will almost always do the right thing,
+          thus you should only set this if the default
+          doesn't work.
+        '';
+      };
       filePath = mkOption {
         type = path;
         internal = true;

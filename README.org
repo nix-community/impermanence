@@ -313,8 +313,11 @@
         exist. Available options are ~user~, ~group~ and ~mode~. See their
         definition in ~directories~ above.
 
-      If the file exists in persistent storage, it will be bind
-      mounted to the target path; otherwise it will be symlinked.
+      - ~method~, the method used to link the file to persistent
+        storage. ~"auto"~, the default, uses a bind mount when the file
+        exists in persistent storage and a symlink
+        otherwise. ~"symlink"~ uses a symlink regardless. Only change
+        this to ~"symlink"~ if ~"auto"~ is giving you issues.
 
     - ~users.talyz~ handles files and directories in ~talyz~'s home
       directory
