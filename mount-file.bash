@@ -19,13 +19,16 @@ mountPoint="$1"
 targetFile="$2"
 debug="$3"
 
-trace() {
-    if ((debug)); then
-        echo "$@"
-    fi
-}
 if ((debug)); then
+    trace() {
+        echo "$@"
+    }
+
     set -o xtrace
+else
+    trace() {
+        :
+    }
 fi
 
 if [[ -L $mountPoint && $(readlink -f "$mountPoint") == "$targetFile" ]]; then
