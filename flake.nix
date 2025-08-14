@@ -104,6 +104,7 @@
                  , filterTextFiles
                  , findutils
                  , nixpkgs-fmt
+                 , shellcheck
                  , shfmt
                  , lib
                  , writers
@@ -114,7 +115,7 @@
                       "--prefix"
                       "PATH"
                       ":"
-                      (lib.makeBinPath [ filterShellScripts filterTextFiles findutils nixpkgs-fmt shfmt ])
+                      (lib.makeBinPath [ filterShellScripts filterTextFiles findutils nixpkgs-fmt shellcheck shfmt ])
                     ];
                   } ''
                   rc=0
@@ -144,6 +145,11 @@
                   }
 
                   ${lib.optionalString checkMode ''
+                  { shell_scripts | xargs -0 -- shellcheck ; } || {
+                      rc="$?"
+                      failed+=('shellcheck')
+                  }
+
                   if (( "''${#failed[@]}" > 0 )); then
                     printf 1>&2 -- 'FAIL: %s\n' "''${failed[@]}"
                   fi
