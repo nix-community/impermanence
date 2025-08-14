@@ -49,5 +49,5 @@ elif [[ $mountPoint == "/etc/machine-id" ]]; then
     touch "$mountPoint"
     mount -o bind "$targetFile" "$mountPoint"
 else
-    ln -s "$targetFile" "$mountPoint"
+    ln -sfT "$targetFile" "$mountPoint"
 fi
