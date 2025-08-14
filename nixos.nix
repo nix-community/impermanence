@@ -900,8 +900,8 @@ in
 
         warnings =
           let
-            usersWithoutUid = attrNames (filterAttrs (n: u: u.uid == null) config.users.users);
-            groupsWithoutGid = attrNames (filterAttrs (n: g: g.gid == null) config.users.groups);
+            usersWithoutUid = attrNames (filterAttrs (_n: u: u.uid == null) config.users.users);
+            groupsWithoutGid = attrNames (filterAttrs (_n: g: g.gid == null) config.users.groups);
             varLibNixosPersistent =
               let
                 varDirs = parentsOf "/var/lib/nixos" ++ [ "/var/lib/nixos" ];
