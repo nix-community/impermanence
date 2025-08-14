@@ -85,6 +85,15 @@ let
       [ ]
       parents;
 
+  parentsUntil = parent:
+    let
+      isAncestorOf' = isAncestorOf parent;
+    in
+    path:
+    if isAncestorOf' path
+    then (filter isAncestorOf' (parentsOf path)) ++ [ parent ]
+    else throw "path '${toString path}' is not a child of ${toString parent}";
+
   sanitizeName = name:
     replaceStrings
       [ "." ] [ "" ]
@@ -156,6 +165,8 @@ let
 
   strictPrefix = a: b: (hasPrefix a b) && (a != b);
 
+  isAncestorOf = parent: path: strictPrefix (normalizePath parent) (normalizePath path);
+
   # Topologically sort the directories we need to create, chown, chmod, etc.
   toposortDirs =
     let
@@ -217,6 +228,7 @@ in
     dirListToPath
     concatPaths
     parentsOf
+    parentsUntil
     sanitizeName
     duplicates
     coercedToDir
