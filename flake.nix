@@ -100,7 +100,8 @@
                 { };
 
               formatter = callPackage
-                ({ filterShellScripts
+                ({ deadnix
+                 , filterShellScripts
                  , filterTextFiles
                  , findutils
                  , nixpkgs-fmt
@@ -115,7 +116,7 @@
                       "--prefix"
                       "PATH"
                       ":"
-                      (lib.makeBinPath [ filterShellScripts filterTextFiles findutils nixpkgs-fmt shellcheck shfmt ])
+                      (lib.makeBinPath [ deadnix filterShellScripts filterTextFiles findutils nixpkgs-fmt shellcheck shfmt ])
                     ];
                   } ''
                   rc=0
@@ -137,6 +138,11 @@
                   { nix_expressions | xargs -0 -- nixpkgs-fmt ${lib.optionalString checkMode "--check"} ; } || {
                     rc="$?"
                     failed+=(nixpkgs-fmt)
+                  }
+
+                  { nix_expressions | xargs -0 -- deadnix ${if checkMode then "--fail" else "--edit"} ; } || {
+                      rc="$?"
+                      failed+=('nixpkgs-fmt')
                   }
 
                   { shell_scripts | xargs -0 -- shfmt -i 4 ${if checkMode then "-d" else "-w"} ; } || {
