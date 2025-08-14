@@ -31,7 +31,7 @@ else
     }
 fi
 
-if [[ -L $mountPoint && $(readlink -f "$mountPoint") == "$targetFile" ]]; then
+if [[ -L "$mountPoint" ]] && [[ "$mountPoint" -ef "$targetFile" ]]; then
     trace "$mountPoint already links to $targetFile, ignoring"
 elif findmnt "$mountPoint" >/dev/null; then
     trace "mount already exists at $mountPoint, ignoring"
