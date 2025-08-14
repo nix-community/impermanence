@@ -27,6 +27,23 @@
       # Deprecated
       nixosModule = self.nixosModules.impermanence;
 
+      checks = eachSystem
+        (system: {
+          formatter = nixpkgs.legacyPackages.${system}.callPackage
+            ({ lib, runCommand, self }: runCommand "impermanence-flake-formatter-check"
+              {
+                inherit self;
+                check = lib.getExe (self.formatter.${system}.override { checkMode = true; });
+              } ''
+              cd "$self" || exit
+              "$check" || exit
+              echo OK > "$out"
+            '')
+            {
+              inherit self;
+            };
+        });
+
       formatter = eachSystem (system:
         let
           formatterPkgs = makeScope nixpkgs.legacyPackages.${system}.newScope (self:
@@ -90,6 +107,7 @@
                  , shfmt
                  , lib
                  , writers
+                 , checkMode ? false
                  }: writers.writeBashBin "impermanence-flake-formatter"
                   {
                     makeWrapperArgs = [
@@ -113,9 +131,23 @@
                     find "$@" -type f -print0 | filter-shell-scripts
                   }
 
-                  { nix_expressions | xargs -0 -- nixpkgs-fmt ; } || rc="$?"
+                  declare -a failed=()
 
-                  { shell_scripts | xargs -0 -- shfmt -i 4 -w ; } || rc="$?"
+                  { nix_expressions | xargs -0 -- nixpkgs-fmt ${lib.optionalString checkMode "--check"} ; } || {
+                    rc="$?"
+                    failed+=(nixpkgs-fmt)
+                  }
+
+                  { shell_scripts | xargs -0 -- shfmt -i 4 ${if checkMode then "-d" else "-w"} ; } || {
+                    rc="$?"
+                    failed+=(shfmt)
+                  }
+
+                  ${lib.optionalString checkMode ''
+                  if (( "''${#failed[@]}" > 0 )); then
+                    printf 1>&2 -- 'FAIL: %s\n' "''${failed[@]}"
+                  fi
+                  ''}
 
                   exit "$rc"
                 '')
