@@ -327,8 +327,98 @@
       set to this path - it can't currently be automatically deduced
       due to a limitation in ~nixpkgs~.
 
+**** Warnings, caveats and restrictions
+
+***** Mark your persistent volues with ~neededForBoot~
+
     /Important note:/ Make sure your persistent volumes are marked with
     ~neededForBoot~, otherwise you will run into problems.
+
+***** Recursive persistent mounts and links are prohibited
+
+    Persistent files and directories cannot have destination paths that live
+    under a ~persistentStoragePath~.  That is, configurations like the
+    following are invalid:
+
+    #+begin_src nix
+      {
+        environment.persistence."/abc".directories = [ "/abc/def" ];
+      }
+    #+end_src
+
+    This is also invalid:
+
+    #+begin_src nix
+      {
+        environment.persistence = {
+          "/abc".directories = [ "/def/abc" ];
+          "/def" = [ ];
+        };
+      }
+    #+end_src
+
+    Forbidding recursive mounts and links helps Impermanence ensure
+    predictability and idempotence: given no changes to the
+    ~environment.persistence~ configuration and no extrinsic changes to the
+    files and directories under any ~persistentStoragePath~, re-running
+    Impermanence's setup steps will result in /no changes/ to
+    Impermanence-managed mounts and links, or the the files and directories
+    represented by those mounts and links.
+
+    Impermanence could not guarantee this if recursive mounts or links
+    were allowed, since this recursion is liable to change the state of files
+    or directories under persistent storage paths in salient ways; for
+    instance, changing their mode or ownership.  Consider this:
+
+    #+begin_src nix
+      {
+        environment.persistence = {
+          "/abc".directories = [
+            { directory = "/ghi"; mode = "0755"; user = "you"; group = "you"; }
+          ];
+
+          "/def" = [
+            { directory = "/abc/ghi"; mode = "0770"; user = "me"; group = "me"; }
+          ];
+        };
+      }
+    #+end_src
+
+    After the first time the Impermanence setup steps run, directory ~/ghi~
+    will have mode ~0755~, user ~you~, and group ~you~.  If recursive mounts or
+    directories were allowed, running those steps again would result in
+    changing ~/ghi~ to have mode ~0770~, user ~me~, and group ~me~.
+
+***** Path traversal is prohibited
+
+    Impermanence will abort if any path specification in its configuration
+    contains ~..~ elements that cannot be resolved without "escaping" the
+    persistent storage path.  An example of such a configuration is:
+
+    #+begin_src nix
+      {
+        environment.persistence = {
+          "/abc".files = [ "../foo/bar" ];
+        };
+      }
+    #+end_src
+
+    ~../foo/bar~ resolves to a path under a /sibling/ directory (~foo~) of the
+    persitent storage path, rather than resolving to a child path of the
+    persistent storage path.
+
+    /Note/, however, that the following configuration is acceptable:
+
+    #+begin_src nix
+      {
+        environment.persistence = {
+          "/abc".files = [ "foo/../bar" ];
+        };
+      }
+    #+end_src
+
+    Impermanence can resolve ~foo/../bar~ to just ~bar~ without traversing out
+    of the persistent storage path.
 
 *** home-manager
 
