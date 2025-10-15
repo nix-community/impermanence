@@ -13,10 +13,12 @@ let
     sanitizeName
     ;
 
-  mount = "${pkgs.util-linux}/bin/mount";
+  # If the name of the mount point contains spaces these can be escaped as '\040'
+  escapeFS = p: builtins.replaceStrings [ " " ] [ "\\040" ] p;
+  mount = "${pkgs.coreutils}/bin/cat /proc/mounts";
   unmountScript = mountPoint: tries: sleep: ''
     triesLeft=${toString tries}
-    if ${mount} | grep -F ${mountPoint}' ' >/dev/null; then
+    if ${mount} | grep -F ${escapeFS mountPoint}' ' >/dev/null; then
         while (( triesLeft > 0 )); do
             if fusermount -u ${mountPoint}; then
                 break
@@ -264,7 +266,7 @@ in
             bindfs = "bindfs" + bindfsOptionFlag;
             startScript = pkgs.writeShellScript name ''
               set -eu
-              if ! mount | grep -F ${mountPoint}' ' && ! mount | grep -F ${mountPoint}/; then
+              if ! ${mount} | grep -F ${escapeFS mountPoint}' ' && ! ${mount} | grep -F ${escapeFS mountPoint}/; then
                   mkdir -p ${mountPoint}
                   exec ${bindfs} ${targetDir} ${mountPoint}
               else
@@ -357,9 +359,9 @@ in
             mkdir -p ${targetDir}
             mkdir -p ${mountPoint}
 
-            if ${mount} | grep -F ${mountPoint}' ' >/dev/null; then
-                if ! ${mount} | grep -F ${mountPoint}' ' | grep -F bindfs; then
-                    if ! ${mount} | grep -F ${mountPoint}' ' | grep -F ${targetDir}' ' >/dev/null; then
+            if ${mount} | grep -F ${escapeFS mountPoint}' ' >/dev/null; then
+                if ! ${mount} | grep -F ${escapeFS mountPoint}' ' | grep -F bindfs; then
+                    if ! ${mount} | grep -F ${escapeFS mountPoint}' ' | grep -F ${targetDir}' ' >/dev/null; then
                         # The target directory changed, so we need to remount
                         echo "remounting ${mountPoint}"
                         ${systemctl} --user stop bindMount-${sanitizeName targetDir}
@@ -367,7 +369,7 @@ in
                         mountedPaths[${mountPoint}]=1
                     fi
                 fi
-            elif ${mount} | grep -F ${mountPoint}/ >/dev/null; then
+            elif ${mount} | grep -F ${escapeFS mountPoint}/ >/dev/null; then
                 echo "Something is mounted below ${mountPoint}, not creating bind mount to ${targetDir}" >&2
             else
                 ${bindfs} ${targetDir} ${mountPoint}
