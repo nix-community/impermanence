@@ -179,14 +179,13 @@
               name = "hm-persistence";
               configuration = { config, ... }:
                 {
-                  home-manager.users.bird.home.stateVersion = config.system.stateVersion;
-
                   imports = [
                     home-manager.nixosModules.home-manager
                   ];
 
                   home-manager.users.bird = {
                     imports = [ ./home-manager.nix ];
+                    home.stateVersion = config.system.stateVersion;
                     home.persistence.main = {
                       persistentStoragePath = "/persistent";
                       directories = [
