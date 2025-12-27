@@ -132,6 +132,16 @@ in
                 '';
               };
 
+              hideMounts = mkOption {
+                type = bool;
+                default = false;
+                example = true;
+                description = ''
+                  Whether to hide bind mounts from showing up as mounted drives.
+                '';
+              };
+
+
               allowOther = mkOption {
                 type = with types; nullOr bool;
                 default = null;
@@ -258,6 +268,7 @@ in
             name = "bindMount-${sanitizeName targetDir}";
             bindfsOptions = concatStringsSep "," (
               optional (!cfg.${persistentStorageName}.allowOther) "no-allow-other"
+              ++ optional (cfg.${persistentStorageName}.hideMounts) "x-gvfs-hide"
               ++ optional (versionAtLeast pkgs.bindfs.version "1.14.9") "fsname=${targetDir}"
             );
             bindfsOptionFlag = optionalString (bindfsOptions != "") (" -o " + bindfsOptions);
