@@ -16,10 +16,24 @@
       nixosModules.default = self.nixosModules.impermanence;
       nixosModules.impermanence = import ./nixos.nix;
 
-      homeManagerModules.default = self.homeManagerModules.impermanence;
-      homeManagerModules.impermanence = import ./home-manager.nix;
-
       # Deprecated
+      homeManagerModules.default = self.homeManagerModules.impermanence;
+      homeManagerModules.impermanence = {
+        assertions = [
+          {
+            assertion = false;
+            message = ''
+              home.persistence: The Home Manager flake outputs are deprecated!
+
+                The Home Manager module will be automatically imported by the NixOS
+                module. Please remove any manual imports.
+
+                See https://github.com/nix-community/impermanence?tab=readme-ov-file#home-manager
+                for updated usage instructions.
+            '';
+          }
+        ];
+      };
       nixosModule = self.nixosModules.impermanence;
       nixosModules.home-manager.impermanence = self.homeManagerModules.impermanence;
 
@@ -64,6 +78,11 @@
                       users.users.bird = {
                         isNormalUser = true;
                         uid = 1000;
+                      };
+
+                      users.users.fish = {
+                        isNormalUser = true;
+                        uid = 1001;
                       };
 
                       virtualisation.fileSystems = {
@@ -179,28 +198,37 @@
               name = "hm-persistence";
               configuration = { config, ... }:
                 {
-                  home-manager.users.bird.home.stateVersion = config.system.stateVersion;
-
                   imports = [
                     home-manager.nixosModules.home-manager
                   ];
 
-                  home-manager.users.bird = {
-                    imports = [ ./home-manager.nix ];
-                    home.persistence.main = {
-                      persistentStoragePath = "/persistent";
-                      directories = [
-                        "Downloads"
-                        "Music"
-                        "Pictures"
-                        "Documents"
-                        "Videos"
-                      ];
-                      files = [
-                        ".config/persistence_test"
-                      ];
+                  home-manager.sharedModules = [{ home.stateVersion = config.system.stateVersion; }];
+
+                  home-manager.users.bird =
+                    {
+                      home.persistence.main = {
+                        persistentStoragePath = "/persistent";
+                        directories = [
+                          "Downloads"
+                          "Music"
+                          "Pictures"
+                          "Documents"
+                          "Videos"
+                        ];
+                        files = [
+                          ".config/persistence_test"
+                        ];
+                      };
                     };
-                  };
+
+                  home-manager.users.fish =
+                    {
+                      home.file = {
+                        "useless".text = ''
+                          a useless file
+                        '';
+                      };
+                    };
                 };
             };
           }

@@ -221,8 +221,13 @@ in
 
   config =
     mkMerge [
-      (lib.optionalAttrs (options ? home-manager.extraSpecialArgs) {
-        home-manager.extraSpecialArgs.persistenceModuleImported = true;
+      (lib.optionalAttrs (options ? home-manager.sharedModules) {
+        home-manager.sharedModules = [
+          ./home-manager.nix
+          {
+            home._nixosModuleImported = true;
+          }
+        ];
       })
       (mkIf (allPersistentStoragePaths != { })
         (mkMerge [

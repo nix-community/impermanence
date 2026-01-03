@@ -340,28 +340,14 @@
     the ~nixos~ directory of Home Manager's repo) *and* the NixOS
     ~persistence~ module in order for this module to work as intended.
 
-    To use the module, import it into your configuration with
+    The module will be loaded automatically when you [[*NixOS][import the NixOS
+    persistence module]] and the Home Manager NixOS module.
 
-    #+begin_src nix
-      {
-        imports = [
-          /path/to/home-manager/nixos
-          /path/to/impermanence/nixos.nix
-        ];
+    It adds the ~home.persistence~ option, which is an attribute set
+    of submodules, where the attribute name is the path to persistent
+    storage.
 
-        home-manager.users.bird =
-          { ... }:
-          {
-            imports = [
-              /path/to/impermanence/home-manager.nix
-              ./home/config.nix # The rest of your Home Manager
-                                # configuration
-            ];
-          };
-      }
-    #+end_src
-
-    or use the provided ~homeManagerModules.impermanence~ flake output:
+    Usage is shown best with an example:
 
     #+begin_src nix
       {
@@ -388,47 +374,30 @@
                   ];
 
                   home-manager.users.bird =
-                    { ... }:
                     {
-                      imports = [
-                        impermanence.homeManagerModules.impermanence
-                        ./home/config.nix # The rest of your Home Manager
-                                          # configuration
-                      ];
-                    };
+                      home.persistence."/persistent" = {
+                        directories = [
+                          "Downloads"
+                          "Music"
+                          "Pictures"
+                          "Documents"
+                          "Videos"
+                          "VirtualBox VMs"
+                          { directory = ".gnupg"; mode = "0700"; }
+                          { directory = ".ssh"; mode = "0700"; }
+                          { directory = ".nixops"; mode = "0700"; }
+                          { directory = ".local/share/keyrings"; mode = "0700"; }
+                          ".local/share/direnv"
+                        ];
+                        files = [
+                          ".screenrc"
+                        ];
+                      };
+                  };
                 }
               ];
             };
           };
-      }
-    #+end_src
-
-    This adds the ~home.persistence~ option, which is an attribute set
-    of submodules, where the attribute name is the path to persistent
-    storage.
-
-    Usage is shown best with an example:
-
-    #+begin_src nix
-      {
-        home.persistence."/persistent" = {
-          directories = [
-            "Downloads"
-            "Music"
-            "Pictures"
-            "Documents"
-            "Videos"
-            "VirtualBox VMs"
-            { directory = ".gnupg"; mode = "0700"; }
-            { directory = ".ssh"; mode = "0700"; }
-            { directory = ".nixops"; mode = "0700"; }
-            { directory = ".local/share/keyrings"; mode = "0700"; }
-            ".local/share/direnv"
-          ];
-          files = [
-            ".screenrc"
-          ];
-        };
       }
     #+end_src
 
