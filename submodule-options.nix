@@ -238,7 +238,14 @@ in
             As real bind mounts are now used instead of bindfs, changing the default directory linking
             method is deprecated.
       '')
-  ];
+  ] ++ (optionals usersOpts [
+    (mkRemovedOptionModule
+      [ "home" ]
+      ''
+        ▹ persistence."${name}":
+            The home directory is now automatically deduced, rendering this option useless.
+      '')
+  ]);
   options =
     {
       files = mkOption {
@@ -266,6 +273,12 @@ in
         description = ''
           Directories to bind mount to persistent storage.
         '';
+      };
+
+      assertions = mkOption {
+        type = listOf unspecified;
+        internal = true;
+        default = [ ];
       };
     } //
     optionalAttrs (!usersOpts)
@@ -312,12 +325,6 @@ in
           description = ''
             Enable non-critical warnings.
           '';
-        };
-
-        assertions = mkOption {
-          type = listOf unspecified;
-          internal = true;
-          default = [ ];
         };
       };
 }
