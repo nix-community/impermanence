@@ -267,7 +267,7 @@ in
 
             boot.initrd.systemd.mounts =
               let
-                mkBindMount = { dirPath, persistentStoragePath, hideMount, ... }: {
+                mkBindMount = { dirPath, persistentStoragePath, hideMount, allowTrash, ... }: {
                   wantedBy = [ "initrd.target" ];
                   before = [ "initrd-nixos-activation.service" ];
                   where = concatPaths [ "/sysroot" dirPath ];
@@ -278,6 +278,8 @@ in
                     "bind"
                   ] ++ optionals hideMount [
                     "x-gvfs-hide"
+                  ] ++ optionals allowTrash [
+                    "x-gvfs-trash"
                   ]);
                 };
                 dirs = filter (d: elem d.dirPath pathsNeededForBoot) directories;
@@ -286,7 +288,7 @@ in
 
             systemd.mounts =
               let
-                mkBindMount = { dirPath, persistentStoragePath, hideMount, ... }: {
+                mkBindMount = { dirPath, persistentStoragePath, hideMount, allowTrash, ... }: {
                   wantedBy = [ "local-fs.target" ];
                   before = [ "local-fs.target" ];
                   where = concatPaths [ "/" dirPath ];
@@ -297,6 +299,8 @@ in
                     "bind"
                   ] ++ optionals hideMount [
                     "x-gvfs-hide"
+                  ] ++ optionals allowTrash [
+                    "x-gvfs-trash"
                   ]);
                 };
               in

@@ -157,6 +157,15 @@ let
           mounted drives.
         '';
       };
+      allowTrash = mkOption {
+        type = bool;
+        default = config.allowTrash;
+        defaultText = "environment.persistence.‹name›.allowTrash";
+        example = true;
+        description = ''
+          Whether to allow newer GIO-based applications to trash files.
+        '';
+      };
       # Save the default permissions at the level the
       # directory resides. This used when creating its
       # parent directories, giving them reasonable
@@ -292,6 +301,15 @@ in
           example = true;
           description = ''
             Whether to hide bind mounts from showing up as mounted drives.
+          '';
+        };
+
+        allowTrash = mkOption {
+          type = bool;
+          default = false;
+          example = true;
+          description = ''
+            Whether to allow newer GIO-based applications to trash files.
           '';
         };
 
