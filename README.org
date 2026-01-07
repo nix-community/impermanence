@@ -214,7 +214,7 @@
             "/etc/machine-id"
             { file = "/var/keys/secret_file"; parentDirectory = { mode = "u=rwx,g=,o="; }; }
           ];
-          users.talyz = {
+          users.bird = {
             directories = [
               "Downloads"
               "Music"
@@ -236,99 +236,103 @@
       }
     #+end_src
 
-    - ~"/persistent"~ is the path to your persistent storage location
+***** ~"/persistent"~
+
+      The path to your persistent storage location.
 
       This allows for multiple different persistent storage
       locations. If you, for example, have one location you back up
       and one you don't, you can use both by defining two separate
       attributes under ~environment.persistence~.
 
-    - ~enable~ determines whether the persistent storage location should
-      be enabled or not. Useful when sharing configurations between
-      systems with and without impermanence setups. Defaults to ~true~.
+      - ~enable~ determines whether the persistent storage location should
+        be enabled or not. Useful when sharing configurations between
+        systems with and without impermanence setups. Defaults to ~true~.
 
-    - ~hideMounts~ allows you to specify whether to hide the
-      bind mounts from showing up as mounted drives in the file
-      manager. If enabled, it sets the mount option ~x-gvfs-hide~
-      on all the bind mounts.
+      - ~hideMounts~ allows you to specify whether to hide the
+        bind mounts from showing up as mounted drives in the file
+        manager. If enabled, it sets the mount option ~x-gvfs-hide~
+        on all the bind mounts.
 
-    #+NAME: directories
-    - ~directories~ are all directories you want to bind mount to
-      persistent storage. A directory can be represented either as a
-      string, simply denoting its path, or as a submodule. The
-      submodule representation is useful when the default assumptions,
-      mainly regarding permissions, are incorrect. The available
-      options are:
+****** ~directories~
 
-      - ~directory~, the path to the directory you want to bind mount
-        to persistent storage. Only setting this option is
-        equivalent to the string representation.
+       All directories you want to bind mount to persistent storage. A
+       directory can be represented either as a string, simply denoting its
+       path, or as a submodule. The submodule representation is useful when
+       the default assumptions, mainly regarding permissions, are
+       incorrect. The available options are:
 
-      - ~persistentStoragePath~, the path to persistent
-        storage. Defaults to the ~environment.persistence~ submodule
-        name, i.e. ~"/persistent"~ in the example. This should most
-        likely be left to its default value - don't change it unless
-        you're certain you really need to.
+       - ~directory~, the path to the directory you want to bind mount to
+         persistent storage. Only setting this option is equivalent to
+         the string representation.
 
-      - ~user~, the user who should own the directory. If the directory
-        doesn't already exist in persistent storage, it will be
-        created and this user will be its owner. This also applies to
-        any parent directories which don't yet exist. Changing this
-        once the directory has been created has no effect.
+       - ~persistentStoragePath~, the path to persistent
+         storage. Defaults to the ~environment.persistence~ submodule
+         name, i.e. ~"/persistent"~ in the example. This should most
+         likely be left to its default value - don't change it unless
+         you're certain you really need to.
 
-      - ~group~, the group who should own the directory. If the
-        directory doesn't already exist in persistent storage, it will
-        be created and this group will be its owner. This also applies
-        to any parent directories which don't yet exist. Changing this
-        once the directory has been created has no effect.
+       - ~user~, the user who should own the directory. If the directory
+         doesn't already exist in persistent storage, it will be
+         created and this user will be its owner. This also applies to
+         any parent directories which don't yet exist. Changing this
+         once the directory has been created has no effect.
 
-      - ~mode~, the permissions to set for the directory. If the
-        directory doesn't already exist in persistent storage, it will
-        be created with this mode. Can be either an octal mode
-        (e.g. ~0700~) or a symbolic mode (e.g. ~u=rwx,g=,o=~). Parent
-        directories that don't yet exist are created with default
-        permissions. Changing this once the directory has been created
-        has no effect.
+       - ~group~, the group who should own the directory. If the
+         directory doesn't already exist in persistent storage, it will
+         be created and this group will be its owner. This also applies
+         to any parent directories which don't yet exist. Changing this
+         once the directory has been created has no effect.
 
-    #+NAME: files
-    - ~files~ are all files you want to link or bind to persistent
-      storage. A file can be represented either as a string, simply
-      denoting its path, or as a submodule. The submodule
-      representation is useful when the default assumptions, mainly
-      regarding the permissions of its parent directory, are
-      incorrect. The available options are:
+       - ~mode~, the permissions to set for the directory. If the
+         directory doesn't already exist in persistent storage, it will
+         be created with this mode. Can be either an octal mode
+         (e.g. ~0700~) or a symbolic mode (e.g. ~u=rwx,g=,o=~). Parent
+         directories that don't yet exist are created with default
+         permissions. Changing this once the directory has been created
+         has no effect.
 
-      - ~file~, the path to the file you want to bind mount to
-        persistent storage. Only setting this option is equivalent to
-        the string representation.
+****** ~files~
 
-      - ~persistentStoragePath~, the path to persistent
-        storage. Defaults to the ~environment.persistence~ submodule
-        name, i.e. ~"/persistent"~ in the example. This should most
-        likely be left to its default value - don't change it unless
-        you're certain you really need to.
+       All files you want to link or bind to persistent storage. A
+       file can be represented either as a string, simply denoting its
+       path, or as a submodule. The submodule representation is useful
+       when the default assumptions, mainly regarding the permissions
+       of its parent directory, are incorrect. The available options
+       are:
 
-      - ~parentDirectory~, the permissions that should be applied to the
-        file's parent directory, if it doesn't already
-        exist. Available options are ~user~, ~group~ and ~mode~. See their
-        definition in ~directories~ above.
+       - ~file~, the path to the file you want to bind mount to
+         persistent storage. Only setting this option is equivalent to
+         the string representation.
 
-      - ~method~, the method used to link the file to persistent
-        storage. ~"auto"~, the default, uses a bind mount when the file
-        exists in persistent storage and a symlink
-        otherwise. ~"symlink"~ uses a symlink regardless. Only change
-        this to ~"symlink"~ if ~"auto"~ is giving you issues.
+       - ~persistentStoragePath~, the path to persistent
+         storage. Defaults to the ~environment.persistence~ submodule
+         name, i.e. ~"/persistent"~ in the example. This should most
+         likely be left to its default value - don't change it unless
+         you're certain you really need to.
 
-    - ~users.talyz~ handles files and directories in ~talyz~'s home
-      directory
+       - ~parentDirectory~, the permissions that should be applied to the
+         file's parent directory, if it doesn't already
+         exist. Available options are ~user~, ~group~ and ~mode~. See their
+         definition in ~directories~ above.
 
-      The ~users~ option defines a set of submodules which correspond to
-      the users' names. The ~directories~ and ~files~ options of each
-      submodule work like their root counterparts, but the paths are
-      automatically prefixed with with the user's home directory.
+       - ~method~, the method used to link the file to persistent
+         storage. ~"auto"~, the default, uses a bind mount when the file
+         exists in persistent storage and a symlink
+         otherwise. ~"symlink"~ uses a symlink regardless. Only change
+         this to ~"symlink"~ if ~"auto"~ is giving you issues.
 
-    /Important note:/ Make sure your persistent volumes are marked with
-    ~neededForBoot~, otherwise you will run into problems.
+****** ~users.bird~
+
+       Handles files and directories in ~bird~'s home directory.
+
+       The ~users~ option defines a set of submodules which correspond to
+       the users' names. The ~directories~ and ~files~ options of each
+       submodule work like their root counterparts, but the paths are
+       automatically prefixed with with the user's home directory.
+
+     /Important note:/ Make sure your persistent volumes are marked with
+     ~neededForBoot~, otherwise you will run into problems.
 
 *** Home Manager
 
@@ -340,7 +344,7 @@
     the ~nixos~ directory of Home Manager's repo) *and* the NixOS
     ~persistence~ module in order for this module to work as intended.
 
-    The module will be loaded automatically when you [[*NixOS][import the NixOS
+    The module will be loaded automatically when you [[#nixos][import the NixOS
     persistence module]] and the Home Manager NixOS module.
 
     It adds the ~home.persistence~ option, which is an attribute set
@@ -401,12 +405,21 @@
       }
     #+end_src
 
-    - ~"/persistent"~ is the path to your persistent storage location.
-    - ~directories~ are all directories you want to bind mount to
-      persistent storage. See [[directories][the NixOS module directories section]] for
-      more details.
-    - ~files~ are all files you want to link or bind to persistent
-      storage. See [[files][the NixOS module files section]] for more details.
+
+****** ~"/persistent"~
+
+       The path to your persistent storage location.
+
+****** ~directories~
+
+       All directories you want to bind mount to persistent
+       storage. See [[#directories][the NixOS module directories section]] for more
+       details.
+
+****** ~files~
+
+       All files you want to link or bind to persistent storage. See
+       [[#files][the NixOS module files section]] for more details.
 
 ** Further reading
    The following blog posts provide more information on the concept of ephemeral
