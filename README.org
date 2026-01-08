@@ -117,6 +117,7 @@
               mv /btrfs_tmp/root "/btrfs_tmp/old_roots/$timestamp"
           fi
 
+          # note: this can be replaced with `btrfs subvolume delete -R "$1"` if your btrfs-progs is version 6.12 or later
           delete_subvolume_recursively() {
               IFS=$'\n'
               for i in $(btrfs subvolume list -o "$1" | cut -f 9- -d ' '); do
