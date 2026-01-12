@@ -426,6 +426,14 @@
        All files you want to link or bind to persistent storage. See
        [[#files][the NixOS module files section]] for more details.
 
+**** Overriding when persisted paths are mounted
+
+       Paths are only mounted when the systemd target for its storage path is brought up. By default these targets are wanted by ~local-fs.target~, meaning that they will be started on boot. For control over when paths are mounted, the targets should be modified to change or remove their ~WantedBy~ lists. To disable automatically mounting the above example:
+
+       #+begin_src nix
+         systemd.targets."home-files-home-bird".wantedBy = lib.mkForce [ ];
+       #+end_src
+
 ** Further reading
    The following blog posts provide more information on the concept of ephemeral
    roots:
