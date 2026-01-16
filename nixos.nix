@@ -397,7 +397,9 @@ in
                               persistentStoragePath = "";
                               home = null;
                               inherit (dir) defaultPerms enableDebugging;
-                              inherit (dir.defaultPerms) user group mode;
+                              inherit (dir.defaultPerms) mode;
+                              user = if dir.home != null then dir.user else dir.defaultPerms.user;
+                              group = if dir.home != null then dir.group else dir.defaultPerms.group;
                             };
                           in
                           if dir.home == null && !(elem persistentStorageDir state) then
@@ -425,7 +427,9 @@ in
                             else
                               path;
                           inherit (dir) persistentStoragePath home enableDebugging;
-                          inherit (dir.defaultPerms) user group mode;
+                          inherit (dir.defaultPerms) mode;
+                          user = if dir.home != null then dir.user else dir.defaultPerms.user;
+                          group = if dir.home != null then dir.group else dir.defaultPerms.group;
                         };
                         # Create new directory items for all parent
                         # directories of a directory.
