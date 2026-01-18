@@ -195,6 +195,19 @@
     attribute set of submodules, where the attribute name is the path
     to persistent storage.
 
+    Note that this project has ~nixpkgs~ and ~home-manager~ as dependencies for
+    development, but these are not needed when using the module. If these extra
+    dependencies appearing in your ~flake.lock~ bother you, you can remove them
+    like this:
+
+    #+begin_src nix
+    inputs = {
+      impermanence.url = "github:nix-community/impermanence";
+      impermanence.inputs.nixpkgs.follows = "";
+      impermanence.inputs.home-manager.follows = "";
+    };
+    #+end_src
+
     Usage is shown best with an example:
 
     #+begin_src nix
