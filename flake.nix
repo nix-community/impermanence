@@ -109,7 +109,7 @@
                           "/etc/ssh/ssh_host_rsa_key.pub"
                         ];
                         directories = [
-                          { directory = "/etc/nixos"; mode = "0700"; user = "root"; group = "root"; }
+                          { directory = "/etc/nixos"; mode = "0700"; user = "bird"; group = "users"; }
                           "/var/log"
                           "/var/lib/bluetooth"
                           "/var/lib/nixos"
@@ -153,6 +153,7 @@
                         persistence.succeed("test ${dir.mode} = $(stat -c %#01a ${targetDir})")
                         ${lib.concatMapStrings (parent:
                           let
+                            user = if dir.home != null then "bird" else "root";
                             parentDir =
                               if dir.home != null then
                                 self.lib.concatPaths [ dir.home parent ]
@@ -160,8 +161,8 @@
                                 parent;
                             persistentParentDir = self.lib.concatPaths [ dir.persistentStoragePath parentDir ];
                           in ''
-                            persistence.succeed("test ${dir.user} = $(stat -c %U ${parentDir})")
-                            persistence.succeed("test ${dir.user} = $(stat -c %U ${persistentParentDir})")
+                            persistence.succeed("test ${user} = $(stat -c %U ${parentDir})")
+                            persistence.succeed("test ${user} = $(stat -c %U ${persistentParentDir})")
                           '')
                           (self.lib.parentsOf dir.directory)}
                       '')
@@ -201,6 +202,7 @@
                     "Documents"
                     "Videos"
                     ".local/share/subdir"
+                    { directory = "owned/by/other/user"; user = "fish"; }
                   ];
                   files = [
                     ".config/persistence_test"
@@ -229,6 +231,7 @@
                           "Documents"
                           "Videos"
                           ".local/share/subdir"
+                          { directory = "owned/by/other/user"; user = "fish"; }
                         ];
                         files = [
                           ".config/persistence_test"
