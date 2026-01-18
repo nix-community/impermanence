@@ -151,6 +151,19 @@
                         persistence.succeed("diff <(stat -c '%Hd %Ld %i' ${targetDir}) <(stat -c '%Hd %Ld %i' ${dir.dirPath})")
                         persistence.succeed("test ${dir.user} = $(stat -c %U ${targetDir})")
                         persistence.succeed("test ${dir.mode} = $(stat -c %#01a ${targetDir})")
+                        ${lib.concatMapStrings (parent:
+                          let
+                            parentDir =
+                              if dir.home != null then
+                                self.lib.concatPaths [ dir.home parent ]
+                              else
+                                parent;
+                            persistentParentDir = self.lib.concatPaths [ dir.persistentStoragePath parentDir ];
+                          in ''
+                            persistence.succeed("test ${dir.user} = $(stat -c %U ${parentDir})")
+                            persistence.succeed("test ${dir.user} = $(stat -c %U ${persistentParentDir})")
+                          '')
+                          (self.lib.parentsOf dir.directory)}
                       '')
                       main.directories}
 
@@ -187,6 +200,7 @@
                     "Pictures"
                     "Documents"
                     "Videos"
+                    ".local/share/subdir"
                   ];
                   files = [
                     ".config/persistence_test"
@@ -214,6 +228,7 @@
                           "Pictures"
                           "Documents"
                           "Videos"
+                          ".local/share/subdir"
                         ];
                         files = [
                           ".config/persistence_test"
