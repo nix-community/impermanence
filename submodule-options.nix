@@ -187,16 +187,16 @@ let
     }
     ({ config, ... }:
       let
-        home = if config.home != null then config.home else "/";
+        parentPath = if config.home != null then config.home else "/";
         directory = dirOf config.file;
       in
       {
         parentDirectory = {
-          dirPath = concatPaths [ home directory ];
-          inherit directory defaultPerms home;
-          inherit (config) persistentStoragePath;
+          dirPath = concatPaths [ parentPath directory ];
+          inherit directory defaultPerms;
+          inherit (config) home persistentStoragePath;
         };
-        filePath = concatPaths [ home config.file ];
+        filePath = concatPaths [ parentPath config.file ];
       })
   ];
   dir = submodule ([
