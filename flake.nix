@@ -146,14 +146,21 @@
                     ${lib.concatMapStrings (dir:
                       let
                         targetDir = self.lib.concatPaths [ dir.persistentStoragePath dir.dirPath ];
+                        group =
+                          if dir.group == null then
+                            nodes.persistence.users.users.${dir.user}.group
+                          else
+                            dir.group;
                       in ''
                         persistence.wait_for_file("${targetDir}", 1)
                         persistence.succeed("diff <(stat -c '%Hd %Ld %i' ${targetDir}) <(stat -c '%Hd %Ld %i' ${dir.dirPath})")
                         persistence.succeed("test ${dir.user} = $(stat -c %U ${targetDir})")
+                        persistence.succeed("test ${group} = $(stat -c %G ${targetDir})")
                         persistence.succeed("test ${dir.mode} = $(stat -c %#01a ${targetDir})")
                         ${lib.concatMapStrings (parent:
                           let
                             user = if dir.home != null then "bird" else "root";
+                            group = if dir.home != null then "users" else "root";
                             parentDir =
                               if dir.home != null then
                                 self.lib.concatPaths [ dir.home parent ]
@@ -162,6 +169,7 @@
                             persistentParentDir = self.lib.concatPaths [ dir.persistentStoragePath parentDir ];
                           in ''
                             persistence.succeed("test ${user} = $(stat -c %U ${parentDir})")
+                            persistence.succeed("test ${group} = $(stat -c %G ${parentDir})")
                             persistence.succeed("test ${user} = $(stat -c %U ${persistentParentDir})")
                           '')
                           (self.lib.parentsOf dir.directory)}
