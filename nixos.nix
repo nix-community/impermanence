@@ -14,6 +14,7 @@ let
     types
     foldl'
     unique
+    concatMap
     concatMapStrings
     escapeShellArg
     escapeShellArgs
@@ -523,6 +524,14 @@ in
                 fileAssertions = flatten (catAttrs "assertions" files);
 
                 directoryAssertions = flatten (catAttrs "assertions" directories);
+
+                filePaths = catAttrs "filePath" files;
+                duplicateFiles = duplicates filePaths;
+
+                dirPaths = catAttrs "dirPath" directories;
+                duplicateDirs = duplicates dirPaths;
+
+                allPaths = unique (concatMap parentsOf (filePaths ++ dirPaths));
               in
               submoduleAssertions
               ++ fileAssertions
@@ -539,37 +548,46 @@ in
                     ''
                       environment.persistence:
                           All filesystems used for persistent storage must
-                          have the flag neededForBoot set to true.
+                          have the option "neededForBoot" set to true.
 
-                          Please fix or remove the following paths:
+                          Please fix the following filesystems:
                             ${concatStringsSep "\n      " offenders}
                     '';
                 }
                 {
-                  assertion = duplicates (catAttrs "filePath" files) == [ ];
+                  # Assert that all ephemeral storage volumes we
+                  # create links into are marked with neededForBoot.
+                  assertion = all (markedNeededForBoot true) allPaths;
                   message =
                     let
-                      offenders = duplicates (catAttrs "filePath" files);
+                      offenders = filter (markedNeededForBoot false) allPaths;
                     in
                     ''
                       environment.persistence:
-                          The following files were specified two or more
-                          times:
+                          All filesystems used for ephemeral storage must
+                          have the option "neededForBoot" set to true.
+
+                          Please fix the following filesystems:
                             ${concatStringsSep "\n      " offenders}
                     '';
                 }
                 {
-                  assertion = duplicates (catAttrs "dirPath" directories) == [ ];
-                  message =
-                    let
-                      offenders = duplicates (catAttrs "dirPath" directories);
-                    in
-                    ''
-                      environment.persistence:
-                          The following directories were specified two or more
-                          times:
-                            ${concatStringsSep "\n      " offenders}
-                    '';
+                  assertion = duplicateFiles == [ ];
+                  message = ''
+                    environment.persistence:
+                        The following files were specified two or more
+                        times:
+                          ${concatStringsSep "\n      " duplicateFiles}
+                  '';
+                }
+                {
+                  assertion = duplicateDirs == [ ];
+                  message = ''
+                    environment.persistence:
+                        The following directories were specified two or more
+                        times:
+                          ${concatStringsSep "\n      " duplicateDirs}
+                  '';
                 }
               ];
 

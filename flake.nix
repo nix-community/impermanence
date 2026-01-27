@@ -91,6 +91,11 @@
                           device = lib.mkForce "none";
                           neededForBoot = true;
                         };
+                        "/home" = {
+                          fsType = lib.mkForce "tmpfs";
+                          device = lib.mkForce "none";
+                          neededForBoot = true;
+                        };
                         "/persistent" = {
                           device = "/dev/vda";
                           fsType = "ext4";

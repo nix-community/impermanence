@@ -32,7 +32,6 @@ let
     in
     prefix + path;
 
-
   parentsOf = path:
     let
       prefix = optionalString (hasPrefix "/" path) "/";

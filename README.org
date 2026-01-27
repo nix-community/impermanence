@@ -349,8 +349,9 @@
        submodule work like their root counterparts, but the paths are
        automatically prefixed with with the user's home directory.
 
-     /Important note:/ Make sure your persistent volumes are marked with
-     ~neededForBoot~, otherwise you will run into problems.
+     /Important note:/ Make sure all your persistent and ephemeral
+     storage volumes are marked with ~neededForBoot~, otherwise you will
+     run into problems.
 
 *** Home Manager
 
