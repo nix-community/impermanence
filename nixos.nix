@@ -47,11 +47,14 @@ let
     pathsNeededForBoot
     ;
 
-  inherit (pkgs.callPackage ./lib.nix { })
+  lib-nix = pkgs.callPackage ./lib.nix { };
+  inherit (lib-nix)
     concatPaths
     parentsOf
     duplicates
     ;
+  usernameToUserModuleId = lib-nix.usernameToUserModuleId config;
+  moduleUserToGroupName = lib-nix.moduleUserToGroupName config;
 
   inherit (config.users) users;
 
@@ -142,8 +145,8 @@ in
                             config = outerConfig // config;
                             name = outerName;
                             usersOpts = true;
-                            user = name;
-                            group = users.${name}.group;
+                            user = users.${name}.name; # resolve to the actual users name to be in line with the home manager module
+                            group = moduleUserToGroupName name; # while we have a compat tool for home manager to fetch the group in the late stages we set it here too to fast track evaluation
                             homeDir = users.${name}.home;
                           }
                         )
@@ -155,7 +158,7 @@ in
                         home directories.
 
                         Each attribute name should be the name of the
-                        user.
+                        user. (as in users.users.<name>)
 
                         For detailed usage, check the <link
                         xlink:href="https://github.com/nix-community/impermanence">documentation</link>.
@@ -194,6 +197,8 @@ in
 
         Each attribute name should be the full path to a persistent
         storage location.
+
+        NOTE: User and group names specified here are their names as they will appear in the system (as in the contents of `users.users.<user>.name` and `users.groups.<group>.name` respectively).
 
         For detailed usage, check the <link
         xlink:href="https://github.com/nix-community/impermanence">documentation</link>.
@@ -331,8 +336,8 @@ in
                       persistentStoragePath
                       dirPath
                       user
-                      # Home Manager doesn't seem to know about the user's group
-                      (if group == null then users.${user}.group else group)
+                      # In the Home Manager module we don't know about the user's group, so we have to fetch it here unless it was explicitly set by some other process
+                      (if group == null then moduleUserToGroupName (usernameToUserModuleId user) else group)
                       mode
                       enableDebugging
                     ];
@@ -370,7 +375,7 @@ in
                               home = null;
                               mode = "0700";
                               user = dir.user;
-                              group = users.${dir.user}.group;
+                              group = moduleUserToGroupName (usernameToUserModuleId dir.user); # we need to override the group attribute here because it would otherwise sometimes cause /home/<user> to be owned by a arbitrary set group by a mount for a child dir
                               inherit defaultPerms;
                               inherit (dir) persistentStoragePath enableDebugging;
                             };
