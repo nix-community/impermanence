@@ -110,6 +110,9 @@ let
     user = "root";
     group = "root";
   };
+
+  getCleanHomeName = home: builtins.replaceStrings [ "/" ] [ "-" ] home;
+  getUnitTarget = home: if home != null then "home-files${getCleanHomeName home}.target" else "local-fs.target";
 in
 {
   options = {
@@ -235,33 +238,34 @@ in
           {
             systemd.services =
               let
-                mkPersistFileService = { filePath, persistentStoragePath, ... }@args:
+                mkPersistFileService = { filePath, persistentStoragePath, home, ... }@args:
                   let
                     targetFile = concatPaths [ persistentStoragePath filePath ];
                     mountPoint = escapeShellArg filePath;
                   in
                   {
-                    "persist-${escapeSystemdPath targetFile}" = {
-                      description = "Bind mount or link ${targetFile} to ${mountPoint}";
-                      wantedBy = [ "local-fs.target" ];
-                      before = [ "local-fs.target" ];
-                      path = [ pkgs.util-linux ];
-                      unitConfig.DefaultDependencies = false;
-                      serviceConfig = {
-                        Type = "oneshot";
-                        RemainAfterExit = true;
-                        ExecStart = mkPersistFile args;
-                        ExecStop = pkgs.writeShellScript "unbindOrUnlink-${escapeSystemdPath targetFile}" ''
-                          set -eu
-                          if [[ -L ${mountPoint} ]]; then
-                              rm ${mountPoint}
-                          else
-                              umount ${mountPoint}
-                              rm ${mountPoint}
-                          fi
-                        '';
+                    "persist-${escapeSystemdPath targetFile}" =
+                      {
+                        description = "Bind mount or link ${targetFile} to ${mountPoint}";
+                        wantedBy = [ (getUnitTarget home) ];
+                        before = [ (getUnitTarget home) ];
+                        path = [ pkgs.util-linux ];
+                        unitConfig.DefaultDependencies = false;
+                        serviceConfig = {
+                          Type = "oneshot";
+                          RemainAfterExit = true;
+                          ExecStart = mkPersistFile args;
+                          ExecStop = pkgs.writeShellScript "unbindOrUnlink-${escapeSystemdPath targetFile}" ''
+                            set -eu
+                            if [[ -L ${mountPoint} ]]; then
+                                rm ${mountPoint}
+                            else
+                                umount ${mountPoint}
+                                rm ${mountPoint}
+                            fi
+                          '';
+                        };
                       };
-                    };
                   };
               in
               foldl' recursiveUpdate { } (map mkPersistFileService files);
@@ -289,23 +293,36 @@ in
 
             systemd.mounts =
               let
-                mkBindMount = { dirPath, persistentStoragePath, hideMount, allowTrash, ... }: {
-                  wantedBy = [ "local-fs.target" ];
-                  before = [ "local-fs.target" ];
-                  where = concatPaths [ "/" dirPath ];
-                  what = concatPaths [ persistentStoragePath dirPath ];
-                  unitConfig.DefaultDependencies = false;
-                  type = "none";
-                  options = concatStringsSep "," ([
-                    "bind"
-                  ] ++ optionals hideMount [
-                    "x-gvfs-hide"
-                  ] ++ optionals allowTrash [
-                    "x-gvfs-trash"
-                  ]);
-                };
+                mkBindMount = { dirPath, persistentStoragePath, hideMount, allowTrash, home, ... }:
+                  {
+                    wantedBy = [ (getUnitTarget home) ];
+                    before = [ (getUnitTarget home) ];
+                    where = concatPaths [ "/" dirPath ];
+                    what = concatPaths [ persistentStoragePath dirPath ];
+                    unitConfig.DefaultDependencies = false;
+                    type = "none";
+                    options = concatStringsSep "," ([
+                      "bind"
+                    ] ++ optionals hideMount [
+                      "x-gvfs-hide"
+                    ] ++ optionals allowTrash [
+                      "x-gvfs-trash"
+                    ]);
+                  };
               in
               map mkBindMount directories;
+
+            systemd.targets = builtins.listToAttrs (builtins.map
+              (entry: {
+                name = "home-files${getCleanHomeName entry.home}";
+                value = {
+                  description = "Target for persisted directories and files under ${entry.home}";
+
+                  # Depends on local-fs.target by default, but can be easily overridden
+                  wantedBy = [ "local-fs.target" ];
+                };
+              })
+              (builtins.filter (entry: entry.home != null) (files ++ directories)));
 
             system.activationScripts =
               let
