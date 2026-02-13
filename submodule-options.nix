@@ -61,6 +61,20 @@ let
           directory is placed within.
         '';
       };
+      homeRelative = mkOption {
+        type = bool;
+        default = config.homeRelative;
+        defaultText = "environment.persistence.‹name›.homeRelative";
+        description = ''
+          Note: This is mainly useful if you have a dotfiles
+          repo structured such that the repo root represents
+          the user home rather than the system root; if you
+          don't, you can likely ignore it.
+
+          Whether the home path is appended to the
+          persistent storage path when linking or mounting.
+        '';
+      };
       enableDebugging = mkOption {
         type = bool;
         default = config.enableDebugging;
@@ -194,7 +208,7 @@ let
         parentDirectory = {
           dirPath = concatPaths [ parentPath directory ];
           inherit directory defaultPerms;
-          inherit (config) home persistentStoragePath;
+          inherit (config) home persistentStoragePath homeRelative;
         };
         filePath = concatPaths [ parentPath config.file ];
       })
@@ -305,6 +319,21 @@ in
           description = ''
             The path to persistent storage where the real
             files and directories should be stored.
+          '';
+        };
+
+        homeRelative = mkOption {
+          type = bool;
+          default = false;
+          example = true;
+          description = ''
+            Note: This is mainly useful if you have a dotfiles
+            repo structured such that the repo root represents
+            the user home rather than the system root; if you
+            don't, you can likely ignore it.
+
+            Whether the home path is appended to the
+            persistent storage path when linking or mounting.
           '';
         };
 
