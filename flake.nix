@@ -200,6 +200,21 @@
                       main.files}
                   '';
               };
+
+            birdDirsAndFiles = {
+              directories = [
+                "Downloads"
+                "Music"
+                "Pictures"
+                "Documents"
+                "Videos"
+                ".local/share/subdir"
+                { directory = "owned/by/other/user"; user = "fish"; }
+              ];
+              files = [
+                ".config/persistence_test"
+              ];
+            };
           in
           {
             nixos = mkTest {
@@ -207,20 +222,7 @@
               configuration = {
                 boot.initrd.systemd.enable = true;
 
-                environment.persistence.main.users.bird = {
-                  directories = [
-                    "Downloads"
-                    "Music"
-                    "Pictures"
-                    "Documents"
-                    "Videos"
-                    ".local/share/subdir"
-                    { directory = "owned/by/other/user"; user = "fish"; }
-                  ];
-                  files = [
-                    ".config/persistence_test"
-                  ];
-                };
+                environment.persistence.main.users.bird = birdDirsAndFiles;
               };
             };
             home-manager = mkTest {
@@ -235,21 +237,9 @@
 
                   home-manager.users.bird =
                     {
-                      home.persistence.main = {
-                        persistentStoragePath = "/persistent";
-                        directories = [
-                          "Downloads"
-                          "Music"
-                          "Pictures"
-                          "Documents"
-                          "Videos"
-                          ".local/share/subdir"
-                          { directory = "owned/by/other/user"; user = "fish"; }
-                        ];
-                        files = [
-                          ".config/persistence_test"
-                        ];
-                      };
+                      home.persistence.main =
+                        { persistentStoragePath = "/persistent"; }
+                        // birdDirsAndFiles;
                     };
 
                   home-manager.users.fish =
