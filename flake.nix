@@ -34,6 +34,8 @@
           }
         ];
       };
+      # Stub module for home-manager on systems without impermanence
+      homeManagerModules.stub = import ./home-manager-stub.nix;
       nixosModule = self.nixosModules.impermanence;
       nixosModules.home-manager.impermanence = self.homeManagerModules.impermanence;
 
