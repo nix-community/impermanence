@@ -61,6 +61,7 @@
       {
         fileSystems."/" = {
           device = "none";
+          neededForBoot = true;
           fsType = "tmpfs";
           options = [ "defaults" "size=25%" "mode=755" ];
         };
@@ -104,6 +105,7 @@
       {
         fileSystems."/" = {
           device = "/dev/root_vg/root";
+          neededForBoot = true;
           fsType = "btrfs";
           options = [ "subvol=root" ];
         };
