@@ -56,7 +56,7 @@
         (system:
           let
             pkgs = nixpkgs.legacyPackages.${system};
-            mkTest = { name, configuration }:
+            mkTest = { name, configuration, testScript ? null }:
               pkgs.testers.runNixOSTest {
                 inherit name;
                 nodes = {
@@ -125,7 +125,7 @@
                     };
                 };
 
-                testScript = { nodes, ... }:
+                testScript = if testScript != null then testScript else { nodes, ... }:
                   let
                     nixos = nodes.persistence.environment.persistence.main;
                     nixos-users = nodes.persistence.environment.persistence.main.users.bird or { };
@@ -261,6 +261,30 @@
                       };
                     };
                 };
+            };
+            deferred-home = mkTest {
+              name = "deferred-home-persistence";
+              configuration = {
+                environment.persistence.main.users.bird = {
+                  directories = [ "Documents" ];
+                  files = [ ".config/persistence_test" ];
+                };
+                environment.persistenceHomes."/home/bird".enableAtBoot = false;
+              };
+              testScript = ''
+                persistence.start()
+                persistence.wait_for_unit("multi-user.target")
+
+                # Activation must not populate the storage below the future mount.
+                persistence.fail("test -e /persistent/home/bird")
+                persistence.succeed("mkdir -p /persistent/home/bird")
+                persistence.succeed("mount -t tmpfs none /persistent/home/bird")
+
+                persistence.succeed("systemctl start home-files-home-bird.target")
+                persistence.succeed("mountpoint -q /home/bird/Documents")
+                persistence.succeed("test -L /home/bird/.config/persistence_test")
+                persistence.succeed("test -d /persistent/home/bird/Documents")
+              '';
             };
           }
         );

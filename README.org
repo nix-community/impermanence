@@ -455,6 +455,20 @@
        All files you want to link or bind to persistent storage. See
        [[#files][the NixOS module files section]] for more details.
 
+**** Deferring home persistence
+
+       Homes whose persistent storage is mounted after boot can defer
+       initialization and persistence units until the storage is available:
+
+       #+begin_src nix
+         environment.persistenceHomes."/home/bird".enableAtBoot = false;
+       #+end_src
+
+       After mounting the storage, start =home-files-home-bird.target=. This
+       creates the declared directories and starts the home persistence units.
+       Boot and =nixos-rebuild= activation do not touch the deferred storage
+       paths.
+
 ** Further reading
    The following blog posts provide more information on the concept of ephemeral
    roots:
