@@ -142,7 +142,7 @@ in
                             config = outerConfig // config;
                             name = outerName;
                             usersOpts = true;
-                            user = name;
+                            user = users.${name}.name;
                             group = users.${name}.group;
                             homeDir = users.${name}.home;
                           }
@@ -369,10 +369,8 @@ in
                               dirPath = dir.home;
                               home = null;
                               mode = "0700";
-                              user = dir.user;
-                              group = users.${dir.user}.group;
                               inherit defaultPerms;
-                              inherit (dir) persistentStoragePath enableDebugging;
+                              inherit (dir) user group persistentStoragePath enableDebugging;
                             };
                           in
                           if dir.home != null then
