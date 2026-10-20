@@ -90,10 +90,21 @@ let
     patchShebangs $out
   '';
 
-  mkPersistFile = { filePath, persistentStoragePath, method, enableDebugging, ... }:
+  mkPersistFile =
+    { filePath
+    , file
+    , persistentStoragePath
+    , homeRelative
+    , method
+    , enableDebugging
+    , ...
+    }:
     let
       mountPoint = filePath;
-      targetFile = concatPaths [ persistentStoragePath filePath ];
+      targetFile = concatPaths [
+        persistentStoragePath
+        (if homeRelative then "/${file}" else filePath)
+      ];
       args = escapeShellArgs [
         mountPoint
         targetFile
@@ -235,9 +246,18 @@ in
           {
             systemd.services =
               let
-                mkPersistFileService = { filePath, persistentStoragePath, ... }@args:
+                mkPersistFileService =
+                  { filePath
+                  , file
+                  , persistentStoragePath
+                  , homeRelative
+                  , ...
+                  }@args:
                   let
-                    targetFile = concatPaths [ persistentStoragePath filePath ];
+                    targetFile = concatPaths [
+                      persistentStoragePath
+                      (if homeRelative then "/${file}" else filePath)
+                    ];
                     mountPoint = escapeShellArg filePath;
                   in
                   {
@@ -268,42 +288,65 @@ in
 
             boot.initrd.systemd.mounts =
               let
-                mkBindMount = { dirPath, persistentStoragePath, hideMount, allowTrash, ... }: {
-                  wantedBy = [ "initrd.target" ];
-                  before = [ "initrd-nixos-activation.service" ];
-                  where = concatPaths [ "/sysroot" dirPath ];
-                  what = concatPaths [ "/sysroot" persistentStoragePath dirPath ];
-                  unitConfig.DefaultDependencies = false;
-                  type = "none";
-                  options = concatStringsSep "," ([
-                    "bind"
-                  ] ++ optionals hideMount [
-                    "x-gvfs-hide"
-                  ] ++ optionals allowTrash [
-                    "x-gvfs-trash"
-                  ]);
-                };
+                mkBindMount =
+                  { dirPath
+                  , directory
+                  , persistentStoragePath
+                  , homeRelative
+                  , hideMount
+                  , allowTrash
+                  , ...
+                  }: {
+                    wantedBy = [ "initrd.target" ];
+                    before = [ "initrd-nixos-activation.service" ];
+                    where = concatPaths [ "/sysroot" dirPath ];
+                    what = concatPaths [
+                      "/sysroot"
+                      persistentStoragePath
+                      (if homeRelative then "/${directory}" else dirPath)
+                    ];
+                    unitConfig.DefaultDependencies = false;
+                    type = "none";
+                    options = concatStringsSep "," ([
+                      "bind"
+                    ] ++ optionals hideMount [
+                      "x-gvfs-hide"
+                    ] ++ optionals allowTrash [
+                      "x-gvfs-trash"
+                    ]);
+                  };
                 dirs = filter (d: elem d.dirPath pathsNeededForBoot) directories;
               in
               map mkBindMount dirs;
 
             systemd.mounts =
               let
-                mkBindMount = { dirPath, persistentStoragePath, hideMount, allowTrash, ... }: {
-                  wantedBy = [ "local-fs.target" ];
-                  before = [ "local-fs.target" ];
-                  where = concatPaths [ "/" dirPath ];
-                  what = concatPaths [ persistentStoragePath dirPath ];
-                  unitConfig.DefaultDependencies = false;
-                  type = "none";
-                  options = concatStringsSep "," ([
-                    "bind"
-                  ] ++ optionals hideMount [
-                    "x-gvfs-hide"
-                  ] ++ optionals allowTrash [
-                    "x-gvfs-trash"
-                  ]);
-                };
+                mkBindMount =
+                  { dirPath
+                  , directory
+                  , persistentStoragePath
+                  , homeRelative
+                  , hideMount
+                  , allowTrash
+                  , ...
+                  }: {
+                    wantedBy = [ "local-fs.target" ];
+                    before = [ "local-fs.target" ];
+                    where = concatPaths [ "/" dirPath ];
+                    what = concatPaths [
+                      persistentStoragePath
+                      (if homeRelative then "/${directory}" else dirPath)
+                    ];
+                    unitConfig.DefaultDependencies = false;
+                    type = "none";
+                    options = concatStringsSep "," ([
+                      "bind"
+                    ] ++ optionals hideMount [
+                      "x-gvfs-hide"
+                    ] ++ optionals allowTrash [
+                      "x-gvfs-trash"
+                    ]);
+                  };
               in
               map mkBindMount directories;
 
@@ -319,7 +362,9 @@ in
 
                 mkDirWithPerms =
                   { dirPath
+                  , directory
                   , persistentStoragePath
+                  , homeRelative
                   , user
                   , group
                   , mode
@@ -329,6 +374,7 @@ in
                   let
                     args = [
                       persistentStoragePath
+                      (if homeRelative then "/${directory}" else dirPath)
                       dirPath
                       user
                       # Home Manager doesn't seem to know about the user's group
@@ -368,6 +414,7 @@ in
                               directory = dir.home;
                               dirPath = dir.home;
                               home = null;
+                              homeRelative = false;
                               mode = "0700";
                               user = dir.user;
                               group = users.${dir.user}.group;
@@ -397,6 +444,7 @@ in
                               dirPath = dir.persistentStoragePath;
                               persistentStoragePath = "";
                               home = null;
+                              homeRelative = false;
                               inherit (dir) defaultPerms enableDebugging;
                               inherit (dir.defaultPerms) user group mode;
                             };
@@ -425,7 +473,7 @@ in
                               concatPaths [ dir.home path ]
                             else
                               path;
-                          inherit (dir) persistentStoragePath home enableDebugging;
+                          inherit (dir) persistentStoragePath home homeRelative enableDebugging;
                           inherit (dir.defaultPerms) user group mode;
                         };
                         # Create new directory items for all parent
@@ -483,9 +531,19 @@ in
             boot.initrd.postMountCommands =
               let
                 neededForBootDirs = filter (dir: elem dir.dirPath pathsNeededForBoot) directories;
-                mkBindMount = { persistentStoragePath, dirPath, ... }:
+                mkBindMount =
+                  { dirPath
+                  , directory
+                  , persistentStoragePath
+                  , homeRelative
+                  , ...
+                  }:
                   let
-                    target = concatPaths [ "/mnt-root" persistentStoragePath dirPath ];
+                    target = concatPaths [
+                      "/mnt-root"
+                      persistentStoragePath
+                      (if homeRelative then "/${directory}" else dirPath)
+                    ];
                   in
                   ''
                     mkdir -p ${escapeShellArg target}

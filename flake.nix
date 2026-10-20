@@ -137,11 +137,16 @@
 
                     persistence.wait_for_unit("sshd.service")
 
+                    persistence.succeed("echo potato > '/home/bird/home_hr_file'")
+                    persistence.succeed("echo potato > '/home/bird/.config/hr_file'")
                     persistence.succeed("echo potato > '/home/bird/.config/persistence_test'")
 
                     ${lib.concatMapStrings (file:
                       let
-                        targetFile = self.lib.concatPaths [ file.persistentStoragePath file.filePath ];
+                        targetFile = self.lib.concatPaths [
+                          file.persistentStoragePath
+                          (if file.homeRelative then "/${file.file}" else file.filePath)
+                        ];
                       in ''
                         persistence.wait_for_file("${targetFile}", 1)
                         persistence.succeed("diff ${targetFile} ${file.filePath}")
@@ -150,7 +155,10 @@
 
                     ${lib.concatMapStrings (dir:
                       let
-                        targetDir = self.lib.concatPaths [ dir.persistentStoragePath dir.dirPath ];
+                        targetDir = self.lib.concatPaths [
+                          dir.persistentStoragePath
+                          (if dir.homeRelative then "/${dir.directory}" else dir.dirPath)
+                        ];
                         group =
                           if dir.group == null then
                             nodes.persistence.users.users.${dir.user}.group
@@ -171,7 +179,10 @@
                                 self.lib.concatPaths [ dir.home parent ]
                               else
                                 parent;
-                            persistentParentDir = self.lib.concatPaths [ dir.persistentStoragePath parentDir ];
+                            persistentParentDir = self.lib.concatPaths [
+                              dir.persistentStoragePath
+                              (if dir.homeRelative then parent else parentDir)
+                            ];
                           in ''
                             persistence.succeed("test ${user} = $(stat -c %U ${parentDir})")
                             persistence.succeed("test ${group} = $(stat -c %G ${parentDir})")
@@ -187,7 +198,10 @@
 
                     ${lib.concatMapStrings (file:
                       let
-                        targetFile = self.lib.concatPaths [ file.persistentStoragePath file.filePath ];
+                        targetFile = self.lib.concatPaths [
+                          file.persistentStoragePath
+                          (if file.homeRelative then "/${file.file}" else file.filePath)
+                        ];
                       in ''
                         persistence.wait_for_file("${targetFile}", 1)
                         ${if file.method == "auto" then ''
@@ -200,6 +214,37 @@
                       main.files}
                   '';
               };
+
+            birdDirsAndFiles = {
+              directories = [
+                "Downloads"
+                "Music"
+                "Pictures"
+                "Documents"
+                "Videos"
+                ".local/share/subdir"
+                { directory = "owned/by/other/user"; user = "fish"; }
+                {
+                  directory = "home_hr_dir_without_child";
+                  homeRelative = true;
+                }
+                {
+                  directory = "home_hr_dir_with_child/subdir";
+                  homeRelative = true;
+                }
+              ];
+              files = [
+                ".config/persistence_test"
+                {
+                  file = "home_hr_file";
+                  homeRelative = true;
+                }
+                {
+                  file = ".config/hr_file";
+                  homeRelative = true;
+                }
+              ];
+            };
           in
           {
             nixos = mkTest {
@@ -207,20 +252,7 @@
               configuration = {
                 boot.initrd.systemd.enable = true;
 
-                environment.persistence.main.users.bird = {
-                  directories = [
-                    "Downloads"
-                    "Music"
-                    "Pictures"
-                    "Documents"
-                    "Videos"
-                    ".local/share/subdir"
-                    { directory = "owned/by/other/user"; user = "fish"; }
-                  ];
-                  files = [
-                    ".config/persistence_test"
-                  ];
-                };
+                environment.persistence.main.users.bird = birdDirsAndFiles;
               };
             };
             home-manager = mkTest {
@@ -235,21 +267,9 @@
 
                   home-manager.users.bird =
                     {
-                      home.persistence.main = {
-                        persistentStoragePath = "/persistent";
-                        directories = [
-                          "Downloads"
-                          "Music"
-                          "Pictures"
-                          "Documents"
-                          "Videos"
-                          ".local/share/subdir"
-                          { directory = "owned/by/other/user"; user = "fish"; }
-                        ];
-                        files = [
-                          ".config/persistence_test"
-                        ];
-                      };
+                      home.persistence.main =
+                        { persistentStoragePath = "/persistent"; }
+                        // birdDirsAndFiles;
                     };
 
                   home-manager.users.fish =
