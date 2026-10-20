@@ -21,6 +21,28 @@ let
       (concatMap (builtins.split "/") paths)
     );
 
+  # `home.username` -> id in `users.users.<id>`
+  usernameToUserModuleId = config: username:
+    let
+      potential_user = lib.filter (set: set.value.name == username) (lib.attrsToList config.users.users);
+      modname = lib.throwIf (builtins.length potential_user == 0) ''
+        home.persistence (home-manager impermanence):
+            The user with username '${username}' is not defined in `users.users`.
+            This causes the home-manager impermanence module to be unable to automatically obtain group names for folder permissions!
+      ''
+        (lib.throwIf (builtins.length potential_user > 1) ''
+          home.persistence (home-manager impermanence):
+              Multiple users in the system wide `users.users` have the same username ('${username}').
+              This might cause further problems with the system.
+              In any case causes the home-manager impermanence module to be unable to automatically obtain group names for folder permissions!
+        ''
+          (lib.head potential_user).name);
+    in
+    modname;
+
+  # id in `users.users.<id>` -> `users.groups.<group-of-user-with-id>`.name
+  moduleUserToGroupName = config: user: config.users.groups.${config.users.users.${user}.group}.name;
+
   # ["home" "user" ".screenrc"] -> "home/user/.screenrc"
   dirListToPath = dirList: (concatStringsSep "/" dirList);
 
@@ -75,5 +97,7 @@ in
     concatPaths
     parentsOf
     duplicates
+    usernameToUserModuleId
+    moduleUserToGroupName
     ;
 }
