@@ -12,6 +12,7 @@ let
     take
     length
     last
+    max
     ;
 
   # ["/home/user/" "/.screenrc"] -> ["home" "user" ".screenrc"]
@@ -36,7 +37,7 @@ let
     let
       prefix = optionalString (hasPrefix "/" path) "/";
       split = splitPath [ path ];
-      parents = take ((length split) - 1) split;
+      parents = take (max 0 ((length split) - 1)) split;
     in
     foldl'
       (state: item:
