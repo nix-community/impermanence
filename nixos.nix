@@ -85,6 +85,43 @@ let
 
   inherit (allPersistentStoragePaths) files directories;
 
+  defaultPerms = {
+    mode = "0755";
+    user = "root";
+    group = "root";
+  };
+
+  # The parent directories of files (for ownership/permissions)
+  fileDirs = unique (catAttrs "parentDirectory" files);
+  # All the directories actually listed by the user and the parent directories of listed files
+  explicitDirs = directories ++ fileDirs;
+  # Home directories have to be handled specially (for permissions)
+  homeDirs =
+    foldl'
+      (state: dir:
+        let
+          homeDir = {
+            directory = dir.home;
+            dirPath = dir.home;
+            home = null;
+            mode = "0700";
+            user = dir.user;
+            group = users.${dir.user}.group;
+            inherit defaultPerms;
+            inherit (dir) persistentStoragePath enableDebugging;
+          };
+        in
+        if dir.home != null then
+          if !(elem homeDir state) then
+            state ++ [ homeDir ]
+          else
+            state
+        else
+          state
+      )
+      [ ]
+      explicitDirs;
+
   mountFile = pkgs.runCommand "persistence-mount-file" { buildInputs = [ pkgs.bash ]; } ''
     cp ${./mount-file.bash} $out
     patchShebangs $out
@@ -104,12 +141,6 @@ let
     ''
       ${mountFile} ${args}
     '';
-
-  defaultPerms = {
-    mode = "0755";
-    user = "root";
-    group = "root";
-  };
 in
 {
   options = {
@@ -327,65 +358,27 @@ in
                   , ...
                   }:
                   let
-                    args = [
+                    groupName = if group == null then users.${user}.group else group;
+                    uid = users.${user}.uid;
+                    gid = config.users.groups.${groupName}.gid;
+                  in
+                  ''
+                    ${createDirectories} ${escapeShellArgs [
                       persistentStoragePath
                       dirPath
                       user
-                      # Home Manager doesn't seem to know about the user's group
-                      (if group == null then users.${user}.group else group)
+                      groupName
                       mode
                       enableDebugging
-                    ];
-                  in
-                  ''
-                    ${createDirectories} ${escapeShellArgs args}
+                      (if uid == null then "" else toString uid)
+                      (if gid == null then "" else toString gid)
+                    ]}
                   '';
 
                 # Build an activation script which creates all persistent
                 # storage directories we want to bind mount.
                 dirCreationScript =
                   let
-                    # The parent directories of files.
-                    fileDirs = unique (catAttrs "parentDirectory" files);
-
-                    # All the directories actually listed by the user and the
-                    # parent directories of listed files.
-                    explicitDirs = directories ++ fileDirs;
-
-                    # Home directories have to be handled specially, since
-                    # they're at the permissions boundary where they
-                    # themselves should be owned by the user and have stricter
-                    # permissions than regular directories, whereas its parent
-                    # should be owned by root and have regular permissions.
-                    #
-                    # This simply collects all the home directories and sets
-                    # the appropriate permissions and ownership.
-                    homeDirs =
-                      foldl'
-                        (state: dir:
-                          let
-                            homeDir = {
-                              directory = dir.home;
-                              dirPath = dir.home;
-                              home = null;
-                              mode = "0700";
-                              user = dir.user;
-                              group = users.${dir.user}.group;
-                              inherit defaultPerms;
-                              inherit (dir) persistentStoragePath enableDebugging;
-                            };
-                          in
-                          if dir.home != null then
-                            if !(elem homeDir state) then
-                              state ++ [ homeDir ]
-                            else
-                              state
-                          else
-                            state
-                        )
-                        [ ]
-                        explicitDirs;
-
                     # Persistent storage directories. These need to be created
                     # unless they're at the root of a filesystem.
                     persistentStorageDirs =
@@ -455,6 +448,11 @@ in
                       ++ explicitDirs;
                   in
                   pkgs.writeShellScript "persistence-run-create-directories" ''
+                    # Skip during nixos-install - users don't exist in chroot
+                    if [ -n "''${NIXOS_INSTALL_BOOTLOADER:-}" ]; then
+                      exit 0
+                    fi
+
                     _status=0
                     trap "_status=1" ERR
                     ${concatMapStrings mkDirWithPerms allDirs}
@@ -463,6 +461,11 @@ in
 
                 persistFileScript =
                   pkgs.writeShellScript "persistence-persist-files" ''
+                    # Skip during nixos-install - users don't exist in chroot
+                    if [ -n "''${NIXOS_INSTALL_BOOTLOADER:-}" ]; then
+                      exit 0
+                    fi
+
                     _status=0
                     trap "_status=1" ERR
                     ${concatMapStrings mkPersistFile files}
@@ -588,6 +591,39 @@ in
                         times:
                           ${concatStringsSep "\n      " duplicateDirs}
                   '';
+                }
+                {
+                  # When using systemd initrd, activation scripts run in initrd
+                  # where /etc/passwd doesn't have regular users. We need
+                  # numeric uid/gid to set ownership correctly.
+                  assertion =
+                    let
+                      # Get all users referenced in persistence config with home directories
+                      userDirs = filter (d: d.home != null) explicitDirs;
+                      # Check if any persisted user dirs have users without uid
+                      offenders = filter (dir: users.${dir.user}.uid == null) userDirs;
+                      usingInitrdSystemd = config.boot.initrd.systemd.enable or false;
+                    in
+                    !usingInitrdSystemd || offenders == [ ];
+                  message =
+                    let
+                      userDirs = filter (d: d.home != null) explicitDirs;
+                      offenders = filter (dir: users.${dir.user}.uid == null) userDirs;
+                    in
+                    ''
+                      environment.persistence:
+                          When using systemd initrd (boot.initrd.systemd.enable = true),
+                          users with persistent home directories must have a uid set.
+                          This is required because activation scripts run in initrd where
+                          usernames cannot be resolved.
+                          
+                          Please set a uid for the following users:
+                            ${concatStringsSep "\n      " (map (d: d.user) (unique offenders))}
+                          
+                          Example:
+                            users.users.myuser.uid = 1000;
+                            users.groups.mygroup.gid = 1000;
+                    '';
                 }
               ];
 

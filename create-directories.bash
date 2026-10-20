@@ -28,8 +28,10 @@ trap 'echo Error when executing ${BASH_COMMAND} at line ${LINENO}! >&2' ERR
 #   3. Copy the mode of the source path to the target path
 
 # Get inputs from command line arguments
-if [[ $# != 6 ]]; then
-    printf "Error: 'create-directories.bash' requires *six* args.\n" >&2
+# Arguments: sourceBase target user group mode debug [uid gid]
+# uid and gid are optional numeric IDs (required for initrd where usernames don't resolve)
+if [[ $# -lt 6 ]]; then
+    printf "Error: 'create-directories.bash' requires at least six args.\n" >&2
     exit 1
 fi
 sourceBase="$1"
@@ -38,10 +40,33 @@ user="$3"
 group="$4"
 mode="$5"
 debug="$6"
+uid="${7:-}"
+gid="${8:-}"
 
 if (( debug )); then
     set -o xtrace
 fi
+
+# Check if user exists (may not in initrd environment)
+# Returns 0 if user exists, 1 otherwise
+user_exists() {
+    id "$1" >/dev/null 2>&1
+}
+
+# Set ownership using either numeric UID/GID or username/group
+# In initrd, usernames don't resolve, so numeric IDs are required
+set_ownership() {
+    local dir="$1"
+    local owner
+    if [[ -n "$uid" && -n "$gid" ]] && ! user_exists "$user"; then
+        # In initrd or if user doesn't exist, use numeric IDs
+        owner="${uid}:${gid}"
+    else
+        # In main system with user database, use username/group
+        owner="${user}:${group}"
+    fi
+    chown "$owner" "$dir"
+}
 
 # check that the source exists and warn the user if it doesn't, then
 # create them with the specified permissions
@@ -49,7 +74,22 @@ realSource="$(realpath -m "$sourceBase$target")"
 if [[ ! -d $realSource ]]; then
     printf "Warning: Source directory '%s' does not exist; it will be created for you with the following permissions: owner: '%s:%s', mode: '%s'.\n" "$realSource" "$user" "$group" "$mode"
     mkdir --mode="$mode" "$realSource"
-    chown "$user:$group" "$realSource"
+    set_ownership "$realSource"
+else
+    # Fix ownership if it was created incorrectly (e.g., during nixos-install)
+    # Compare using numeric IDs since in initrd usernames show as UNKNOWN
+    current_uid=$(stat -c '%u' "$realSource")
+    current_gid=$(stat -c '%g' "$realSource")
+    desired_uid="${uid:-}"
+    desired_gid="${gid:-}"
+
+    # Only try to fix if we have the desired uid/gid and they differ
+    if [[ -n "$desired_uid" && -n "$desired_gid" ]]; then
+        if [[ "$current_uid" != "$desired_uid" || "$current_gid" != "$desired_gid" ]]; then
+            printf "Fixing ownership of '%s' from uid=%s:gid=%s to %s:%s\n" "$realSource" "$current_uid" "$current_gid" "$desired_uid" "$desired_gid"
+            chown "${desired_uid}:${desired_gid}" "$realSource"
+        fi
+    fi
 fi
 
 if [[ $sourceBase ]]; then
