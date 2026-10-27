@@ -171,6 +171,63 @@
     This assumes the BTRFS filesystem can be found in an LVM volume
     group called ~root_vg~. Adjust the path as necessary.
 
+*** ZFS
+
+    Another approach is to use ZFS datasets. Similar to BTRFS
+    subvolumes, you can roll the root dataset on each boot by renaming
+    it aside and creating a fresh, empty dataset. Old roots are kept
+    around, giving you the ability to recover files after a crash or
+    power outage.
+
+    A setup which would automatically remove roots that are older than
+    30 days could look like this:
+
+    #+begin_src nix
+      {
+        fileSystems."/" = {
+          device = "tank/ephemeral/root";
+          fsType = "zfs";
+        };
+
+        boot.initrd.postResumeCommands = lib.mkAfter ''
+          # Roll the current root dataset aside, tagged with its creation time
+          zfs rename tank/ephemeral/root tank/ephemeral/root-$(date --date=@$(zfs get -Hpo value creation tank/ephemeral/root) "+%Y-%m-%d-%H%M%S")
+
+          # Delete old root datasets that are more than 30 days old
+          cutoff=$(date -d '30 days ago' '+%s')
+          for fs in $(zfs list -Ho name -r tank/ephemeral | grep '^tank/ephemeral/root-'); do
+              created=$(zfs get -Hpo value creation "$fs")
+              if [ "$created" -lt "$cutoff" ]; then
+                  zfs destroy -r "$fs"
+              fi
+          done
+
+          # Create a fresh root dataset
+          zfs create tank/ephemeral/root
+        '';
+
+        fileSystems."/persistent" = {
+          device = "tank/persistent";
+          neededForBoot = true;
+          fsType = "zfs";
+        };
+
+        fileSystems."/nix" = {
+          device = "tank/nix";
+          fsType = "zfs";
+        };
+
+        fileSystems."/boot" = {
+          device = "/dev/disk/by-uuid/XXXX-XXXX";
+          fsType = "vfat";
+        };
+      }
+    #+end_src
+
+    This assumes a ZFS pool called ~tank~ with datasets
+    ~tank/ephemeral/root~, ~tank/persistent~, and ~tank/nix~. Adjust
+    the pool and dataset names as necessary.
+
 * Module usage
 
   There are currently two modules: one for NixOS and one for Home Manager.
