@@ -468,15 +468,55 @@ in
                     ${concatMapStrings mkPersistFile files}
                     exit $_status
                   '';
+
+                purgeUndeclaredScript = pkgs.runCommand "persistence-purge-undeclared" { buildInputs = [ pkgs.bash ]; } ''
+                  cp ${./purge-undeclared.bash} $out
+                  patchShebangs $out
+                '';
+
+                purgeConfigs = filterAttrs (_: v: v.purgeUndeclaredFiles && v.enable) cfg;
+
+                mkPurgeCmdForBlock = name: v:
+                  let
+                    base = v.persistentStoragePath;
+
+                    hmConfigsForBlock = filter (hmCfg: hmCfg.persistentStoragePath == base) (
+                      flatten (mapAttrsToList (_name: value: attrValues (value.home.persistence or { })) config.home-manager.users or { })
+                    );
+
+                    sysDirs = map (d: concatPaths [ base d.dirPath ]) v.directories;
+                    sysFiles = map (f: concatPaths [ base f.filePath ]) v.files;
+
+                    usersDirs = concatMap (u: map (d: concatPaths [ base d.dirPath ]) u.directories) (attrValues v.users);
+                    usersFiles = concatMap (u: map (f: concatPaths [ base f.filePath ]) u.files) (attrValues v.users);
+
+                    hmDirs = concatMap (hm: map (d: concatPaths [ base d.dirPath ]) hm.directories) hmConfigsForBlock;
+                    hmFiles = concatMap (hm: map (f: concatPaths [ base f.filePath ]) hm.files) hmConfigsForBlock;
+
+                    pureDirs = unique (sysDirs ++ usersDirs ++ hmDirs);
+                    pureFiles = unique (sysFiles ++ usersFiles ++ hmFiles);
+                    pureParents = unique (concatMap parentsOf (pureDirs ++ pureFiles));
+
+                    debugArg = if v.enableDebugging then "1" else "0";
+                    args = [ base debugArg ] ++ [ "--dirs" ] ++ pureDirs ++ [ "--files" ] ++ pureFiles ++ [ "--parents" ] ++ pureParents;
+                  in
+                  ''
+                    ${purgeUndeclaredScript} ${escapeShellArgs args}
+                  '';
+                purgeScript = concatMapStrings (name: mkPurgeCmdForBlock name cfg.${name}) (attrNames purgeConfigs);
               in
               {
                 "createPersistentStorageDirs" = {
-                  deps = [ "users" "groups" ];
+                  deps = [ "users" "groups" "purgeUndeclaredFiles" ];
                   text = "${dirCreationScript}";
                 };
                 "persist-files" = {
                   deps = [ "createPersistentStorageDirs" ];
                   text = "${persistFileScript}";
+                };
+                "purgeUndeclaredFiles" = {
+                  deps = [ "users" "groups" ];
+                  text = purgeScript;
                 };
               };
 

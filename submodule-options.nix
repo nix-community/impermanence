@@ -317,6 +317,15 @@ in
           '';
         };
 
+        purgeUndeclaredFiles = mkOption {
+          type = bool;
+          default = false;
+          description = ''
+            Whether to automatically remove files and directories within the persistent
+            storage path that are not explicitly specified in the configuration.
+          '';
+        };
+
         allowTrash = mkOption {
           type = bool;
           default = false;
