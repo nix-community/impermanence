@@ -12,6 +12,7 @@ let
     take
     length
     last
+    replaceString
     ;
 
   # ["/home/user/" "/.screenrc"] -> ["home" "user" ".screenrc"]
@@ -67,6 +68,9 @@ let
           list;
     in
     result.duplicates;
+
+  # "something%with%percents" -> "something%%with%%percents"
+  escapePercent = replaceString "%" "%%";
 in
 {
   inherit
@@ -75,5 +79,6 @@ in
     concatPaths
     parentsOf
     duplicates
+    escapePercent
     ;
 }

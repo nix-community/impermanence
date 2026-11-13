@@ -51,6 +51,7 @@ let
     concatPaths
     parentsOf
     duplicates
+    escapePercent
     ;
 
   inherit (config.users) users;
@@ -268,42 +269,52 @@ in
 
             boot.initrd.systemd.mounts =
               let
-                mkBindMount = { dirPath, persistentStoragePath, hideMount, allowTrash, ... }: {
-                  wantedBy = [ "initrd.target" ];
-                  before = [ "initrd-nixos-activation.service" ];
-                  where = concatPaths [ "/sysroot" dirPath ];
-                  what = concatPaths [ "/sysroot" persistentStoragePath dirPath ];
-                  unitConfig.DefaultDependencies = false;
-                  type = "none";
-                  options = concatStringsSep "," ([
-                    "bind"
-                  ] ++ optionals hideMount [
-                    "x-gvfs-hide"
-                  ] ++ optionals allowTrash [
-                    "x-gvfs-trash"
-                  ]);
-                };
+                mkBindMount = { dirPath, persistentStoragePath, hideMount, allowTrash, ... }:
+                  let
+                    wherePath = concatPaths [ "/sysroot" dirPath ];
+                  in
+                  {
+                    name = lib.mkForce "${escapeSystemdPath wherePath}.mount";
+                    wantedBy = [ "initrd.target" ];
+                    before = [ "initrd-nixos-activation.service" ];
+                    where = escapePercent wherePath;
+                    what = escapePercent (concatPaths [ "/sysroot" persistentStoragePath dirPath ]);
+                    unitConfig.DefaultDependencies = false;
+                    type = "none";
+                    options = concatStringsSep "," ([
+                      "bind"
+                    ] ++ optionals hideMount [
+                      "x-gvfs-hide"
+                    ] ++ optionals allowTrash [
+                      "x-gvfs-trash"
+                    ]);
+                  };
                 dirs = filter (d: elem d.dirPath pathsNeededForBoot) directories;
               in
               map mkBindMount dirs;
 
             systemd.mounts =
               let
-                mkBindMount = { dirPath, persistentStoragePath, hideMount, allowTrash, ... }: {
-                  wantedBy = [ "local-fs.target" ];
-                  before = [ "local-fs.target" ];
-                  where = concatPaths [ "/" dirPath ];
-                  what = concatPaths [ persistentStoragePath dirPath ];
-                  unitConfig.DefaultDependencies = false;
-                  type = "none";
-                  options = concatStringsSep "," ([
-                    "bind"
-                  ] ++ optionals hideMount [
-                    "x-gvfs-hide"
-                  ] ++ optionals allowTrash [
-                    "x-gvfs-trash"
-                  ]);
-                };
+                mkBindMount = { dirPath, persistentStoragePath, hideMount, allowTrash, ... }:
+                  let
+                    wherePath = concatPaths [ "/" dirPath ];
+                  in
+                  {
+                    name = lib.mkForce "${escapeSystemdPath wherePath}.mount";
+                    wantedBy = [ "local-fs.target" ];
+                    before = [ "local-fs.target" ];
+                    where = escapePercent wherePath;
+                    what = escapePercent (concatPaths [ persistentStoragePath dirPath ]);
+                    unitConfig.DefaultDependencies = false;
+                    type = "none";
+                    options = concatStringsSep "," ([
+                      "bind"
+                    ] ++ optionals hideMount [
+                      "x-gvfs-hide"
+                    ] ++ optionals allowTrash [
+                      "x-gvfs-trash"
+                    ]);
+                  };
               in
               map mkBindMount directories;
 
