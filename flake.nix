@@ -205,8 +205,6 @@
             nixos = mkTest {
               name = "nixos-persistence";
               configuration = {
-                boot.initrd.systemd.enable = true;
-
                 environment.persistence.main.users.bird = {
                   directories = [
                     "Downloads"
